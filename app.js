@@ -179,11 +179,34 @@ let INVENTORY = [
   { material:"Aluminium Window Frames", unit:"Sqm", opening:0, received:0, consumed:0, reorder:50 },
 ];
 
+/* ---------------------------- Labour & Contractor data ---------------------------- */
+const TRADES = ["Mason", "Carpenter", "Bar Bender", "Electrician", "Plumber", "Painter", "Helper", "Fitter"];
+
+let CONTRACTORS = [
+  { id:"CTR-01", name:"Shivaji Labour Suppliers", trade:"Mason", project:"Green Park Residency", workers:32, dayRate:750, totalBilled:1840000, advance:220000, outstanding:1620000 },
+  { id:"CTR-02", name:"Patil Construction Labour", trade:"Bar Bender", project:"Blue Ridge Tower", workers:18, dayRate:820, totalBilled:1120000, advance:150000, outstanding:970000 },
+  { id:"CTR-03", name:"Deshmukh Electrical Works", trade:"Electrician", project:"Sunrise Apartments", workers:12, dayRate:900, totalBilled:640000, advance:80000, outstanding:560000 },
+  { id:"CTR-04", name:"Karad Carpentry Group", trade:"Carpenter", project:"Silver County", workers:15, dayRate:780, totalBilled:580000, advance:60000, outstanding:520000 },
+  { id:"CTR-05", name:"Om Sai Painting Contractors", trade:"Painter", project:"Metro Heights", workers:22, dayRate:680, totalBilled:410000, advance:40000, outstanding:370000 },
+  { id:"CTR-06", name:"Bhosale Plumbing Services", trade:"Plumber", project:"Green Park Residency", workers:9, dayRate:850, totalBilled:295000, advance:35000, outstanding:260000 },
+];
+
+let ATTENDANCE = [
+  { id:"ATT-001", date:"2026-08-14", contractor:"Shivaji Labour Suppliers", project:"Green Park Residency", present:30, absent:2, otHours:24 },
+  { id:"ATT-002", date:"2026-08-14", contractor:"Patil Construction Labour", project:"Blue Ridge Tower", present:16, absent:2, otHours:12 },
+  { id:"ATT-003", date:"2026-08-14", contractor:"Deshmukh Electrical Works", project:"Sunrise Apartments", present:11, absent:1, otHours:6 },
+  { id:"ATT-004", date:"2026-08-13", contractor:"Karad Carpentry Group", project:"Silver County", present:14, absent:1, otHours:8 },
+  { id:"ATT-005", date:"2026-08-13", contractor:"Om Sai Painting Contractors", project:"Metro Heights", present:20, absent:2, otHours:16 },
+  { id:"ATT-006", date:"2026-08-13", contractor:"Bhosale Plumbing Services", project:"Green Park Residency", present:8, absent:1, otHours:4 },
+  { id:"ATT-007", date:"2026-08-12", contractor:"Shivaji Labour Suppliers", project:"Green Park Residency", present:29, absent:3, otHours:18 },
+];
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
   boq: { query:"", project:"All", status:"All", page:1, pageSize:6 },
   purchase: { tab:"po", query:"", status:"All", page:1, pageSize:6 },
+  labour: { tab:"attendance", query:"", page:1, pageSize:6 },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -1283,6 +1306,341 @@ function openMaterialReceiptModal(){
   openModalNode(node);
 }
 
+/* ---------------------------- Labour & Contractor module ---------------------------- */
+function attWage(a, contractor){
+  const c = CONTRACTORS.find(x=>x.name===a.contractor) || contractor;
+  const rate = c ? c.dayRate : 0;
+  const otRate = rate / 8 * 1.5;
+  return a.present * rate + a.otHours * otRate;
+}
+
+function getFilteredAttendance(){
+  const { query } = state.labour;
+  return [...ATTENDANCE].filter(a => a.contractor.toLowerCase().includes(query.toLowerCase()) || a.project.toLowerCase().includes(query.toLowerCase()))
+    .sort((a,b)=> b.date.localeCompare(a.date));
+}
+function getFilteredContractors(){
+  const { query } = state.labour;
+  return CONTRACTORS.filter(c => c.name.toLowerCase().includes(query.toLowerCase()) || c.trade.toLowerCase().includes(query.toLowerCase()));
+}
+
+function renderLabourModule(){
+  const main = document.getElementById("mainContent");
+  const totalWorkers = CONTRACTORS.reduce((s,c)=> s+c.workers, 0);
+  const todayAtt = ATTENDANCE.filter(a=>a.date==="2026-08-14");
+  const presentToday = todayAtt.reduce((s,a)=> s+a.present, 0);
+  const absentToday = todayAtt.reduce((s,a)=> s+a.absent, 0);
+  const totalOutstanding = CONTRACTORS.reduce((s,c)=> s+c.outstanding, 0);
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="labourSummary"></section>
+    <div class="flex gap-2" id="labourTabs">
+      <button class="btn-secondary" id="tabAttendance">Attendance</button>
+      <button class="btn-secondary" id="tabContractors">Contractors</button>
+    </div>
+    <div id="labourTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("labourSummary");
+  [
+    { label:"Total Labour", value:totalWorkers, icon:"hard-hat", tint:"blue" },
+    { label:"Present Today", value:presentToday, icon:"check-circle-2", tint:"green" },
+    { label:"Absent Today", value:absentToday, icon:"clock", tint:"orange" },
+    { label:"Contractor Outstanding", value:fmtINR(totalOutstanding), icon:"indian-rupee", tint:"navy" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabAttendance").addEventListener("click", ()=>{ state.labour.tab="attendance"; state.labour.query=""; state.labour.page=1; renderLabourTab(); });
+  document.getElementById("tabContractors").addEventListener("click", ()=>{ state.labour.tab="contractors"; state.labour.query=""; state.labour.page=1; renderLabourTab(); });
+
+  renderLabourTab();
+  icons();
+}
+
+function renderLabourTab(){
+  document.getElementById("tabAttendance").classList.toggle("btn-primary", state.labour.tab==="attendance");
+  document.getElementById("tabAttendance").classList.toggle("btn-secondary", state.labour.tab!=="attendance");
+  document.getElementById("tabContractors").classList.toggle("btn-primary", state.labour.tab==="contractors");
+  document.getElementById("tabContractors").classList.toggle("btn-secondary", state.labour.tab!=="contractors");
+  if (state.labour.tab === "attendance") renderAttendanceTab(); else renderContractorsTab();
+  icons();
+}
+
+function renderAttendanceTab(){
+  const body = document.getElementById("labourTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="attSearch" placeholder="Search by contractor or project…" value="${state.labour.query}"/></div>
+      <button class="btn-primary" id="markAttendanceBtn"><i data-lucide="clipboard-list" style="width:15px;height:15px"></i>Mark Attendance</button>
+    </div>
+    <p class="tiny muted mt-2" id="attResultCount"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Date</th><th>Contractor</th><th>Project</th><th>Present</th><th>Absent</th><th>OT Hours</th><th>Wage Payable</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody id="attTbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="attPagination" style="display:none">
+      <p class="tiny muted" id="attPageInfo"></p>
+      <div class="flex gap-2"><button class="pg-btn" id="attPrevPage"><i data-lucide="chevron-left"></i></button><button class="pg-btn" id="attNextPage"><i data-lucide="chevron-right"></i></button></div>
+    </div>
+  `;
+  document.getElementById("attSearch").addEventListener("input", (e)=>{ state.labour.query=e.target.value; state.labour.page=1; renderAttendanceList(); });
+  document.getElementById("markAttendanceBtn").addEventListener("click", ()=> openAttendanceFormModal(null));
+  renderAttendanceList();
+  icons();
+}
+
+function renderAttendanceList(){
+  const filtered = getFilteredAttendance();
+  const { pageSize } = state.labour;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.labour.page > totalPages) state.labour.page = totalPages;
+  const pageRows = filtered.slice((state.labour.page-1)*pageSize, state.labour.page*pageSize);
+
+  document.getElementById("attResultCount").textContent = `${filtered.length} attendance records found`;
+  const tbody = document.getElementById("attTbody");
+  tbody.innerHTML = "";
+  if (pageRows.length===0){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No attendance records match your search.</td></tr>`;
+  }
+  pageRows.forEach(a=>{
+    tbody.appendChild(el(`<tr>
+      <td class="tiny">${a.date}</td>
+      <td style="font-weight:600">${a.contractor}</td>
+      <td>${a.project}</td>
+      <td style="color:#16A34A;font-weight:600">${a.present}</td>
+      <td style="color:#DC2626;font-weight:600">${a.absent}</td>
+      <td>${a.otHours} hrs</td>
+      <td style="font-weight:600">${fmtINR(attWage(a))}</td>
+      <td><div class="row-actions">
+        <button class="icon-action edit" data-id="${a.id}" data-act="edit"><i data-lucide="pencil"></i></button>
+        <button class="icon-action del" data-id="${a.id}" data-act="del"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openAttendanceFormModal(ATTENDANCE.find(a=>a.id===b.dataset.id))));
+  tbody.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    ATTENDANCE = ATTENDANCE.filter(a=>a.id!==b.dataset.id);
+    showToast("Attendance record deleted");
+    renderAttendanceList();
+  }));
+
+  const pag = document.getElementById("attPagination");
+  if (totalPages > 1){
+    pag.style.display = "flex";
+    document.getElementById("attPageInfo").textContent = `Page ${state.labour.page} of ${totalPages}`;
+    const prev = document.getElementById("attPrevPage"), next = document.getElementById("attNextPage");
+    prev.disabled = state.labour.page===1; next.disabled = state.labour.page===totalPages;
+    prev.onclick = ()=>{ state.labour.page--; renderAttendanceList(); icons(); };
+    next.onclick = ()=>{ state.labour.page++; renderAttendanceList(); icons(); };
+  } else { pag.style.display = "none"; }
+  icons();
+}
+
+function openAttendanceFormModal(att){
+  const isEdit = !!att;
+  const contractorNames = CONTRACTORS.map(c=>c.name);
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const f = att || { date:"2026-08-15", contractor:contractorNames[0]||"", project:projectNames[0]||"", present:"", absent:"", otHours:"" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Attendance" : "Mark Labour Attendance"}</h3><button class="icon-btn" id="closeAF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>Date</label><input type="date" id="a_date" value="${f.date}"/></div>
+          <div class="field"><label>Project</label><select id="a_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select></div>
+          <div class="field col-span-2"><label>Contractor</label><select id="a_contractor">${contractorNames.map(c=>`<option ${c===f.contractor?"selected":""}>${c}</option>`).join("")}</select></div>
+          <div class="field"><label>Present Count</label><input type="number" id="a_present" value="${f.present}"/></div>
+          <div class="field"><label>Absent Count</label><input type="number" id="a_absent" value="${f.absent}"/></div>
+          <div class="field"><label>Overtime Hours</label><input type="number" id="a_ot" value="${f.otHours}"/></div>
+          <div class="field"><label>Wage Payable</label><input type="text" id="a_wage" disabled style="background:#F8FAFC;color:#64748b"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelAF">Cancel</button>
+          <button class="btn-primary" id="saveAF">${isEdit ? "Save Changes" : "Save Attendance"}</button>
+        </div>
+      </div>
+    </div>`);
+
+  const presentI = node.querySelector("#a_present"), otI = node.querySelector("#a_ot"), contractorSel = node.querySelector("#a_contractor"), wageI = node.querySelector("#a_wage");
+  const recalcWage = ()=>{
+    const c = CONTRACTORS.find(x=>x.name===contractorSel.value);
+    const rate = c ? c.dayRate : 0;
+    const present = Number(presentI.value)||0, ot = Number(otI.value)||0;
+    wageI.value = fmtINR(present*rate + ot*(rate/8*1.5));
+  };
+  presentI.addEventListener("input", recalcWage); otI.addEventListener("input", recalcWage); contractorSel.addEventListener("change", recalcWage);
+  recalcWage();
+
+  node.querySelector("#closeAF").addEventListener("click", closeModal);
+  node.querySelector("#cancelAF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveAF").addEventListener("click", ()=>{
+    const payload = {
+      date: node.querySelector("#a_date").value,
+      project: node.querySelector("#a_project").value,
+      contractor: contractorSel.value,
+      present: Number(node.querySelector("#a_present").value) || 0,
+      absent: Number(node.querySelector("#a_absent").value) || 0,
+      otHours: Number(node.querySelector("#a_ot").value) || 0,
+    };
+    if (isEdit){
+      Object.assign(att, payload);
+      showToast("Attendance updated");
+    } else {
+      const id = `ATT-${String(ATTENDANCE.length+1).padStart(3,"0")}`;
+      ATTENDANCE = [{ id, ...payload }, ...ATTENDANCE];
+      showToast("Attendance saved");
+      state.labour.page = 1;
+    }
+    closeModal();
+    renderAttendanceList();
+  });
+  openModalNode(node);
+}
+
+function renderContractorsTab(){
+  const body = document.getElementById("labourTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="ctrSearch" placeholder="Search contractor or trade…" value="${state.labour.query}"/></div>
+      <button class="btn-primary" id="newContractorBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Contractor</button>
+    </div>
+    <p class="tiny muted mt-2" id="ctrResultCount"></p>
+    <div class="grid grid-3 mt-2" id="ctrCards"></div>
+  `;
+  document.getElementById("ctrSearch").addEventListener("input", (e)=>{ state.labour.query=e.target.value; renderContractorsList(); });
+  document.getElementById("newContractorBtn").addEventListener("click", ()=> openContractorFormModal(null));
+  renderContractorsList();
+  icons();
+}
+
+function renderContractorsList(){
+  const filtered = getFilteredContractors();
+  document.getElementById("ctrResultCount").textContent = `${filtered.length} contractors found`;
+  const wrap = document.getElementById("ctrCards");
+  wrap.innerHTML = "";
+  filtered.forEach(c=>{
+    wrap.appendChild(el(`
+      <div class="card proj-card">
+        <div class="flex-between" style="align-items:flex-start;margin-bottom:6px">
+          <div><p style="font-weight:600;font-size:13px;margin:0">${c.name}</p><p style="font-size:11px;color:#64748b;margin:0">${c.trade} · ${c.project}</p></div>
+        </div>
+        <div class="module-rows" style="margin:10px 0">
+          <div><p class="k">Workers</p><p class="v">${c.workers}</p></div>
+          <div><p class="k">Day Rate</p><p class="v">₹${c.dayRate}</p></div>
+          <div><p class="k">Total Billed</p><p class="v">${fmtINR(c.totalBilled)}</p></div>
+          <div><p class="k">Outstanding</p><p class="v" style="color:#DC2626">${fmtINR(c.outstanding)}</p></div>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <button class="btn-secondary" style="flex:1;padding:7px" data-act="pay" data-id="${c.id}">Record Payment</button>
+        </div>
+        <div class="row-actions mt-2" style="border-top:1px solid #F1F5F9;padding-top:8px">
+          <button class="icon-action edit" data-act="edit" data-id="${c.id}"><i data-lucide="pencil"></i></button>
+          <button class="icon-action del" data-act="del" data-id="${c.id}"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`));
+  });
+  wrap.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openContractorFormModal(CONTRACTORS.find(c=>c.id===b.dataset.id))));
+  wrap.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    CONTRACTORS = CONTRACTORS.filter(c=>c.id!==b.dataset.id);
+    showToast("Contractor removed");
+    renderContractorsList();
+  }));
+  wrap.querySelectorAll("[data-act='pay']").forEach(b=> b.addEventListener("click", ()=> openContractorPaymentModal(CONTRACTORS.find(c=>c.id===b.dataset.id))));
+  icons();
+}
+
+function openContractorFormModal(contractor){
+  const isEdit = !!contractor;
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const f = contractor || { name:"", trade:TRADES[0], project:projectNames[0]||"", workers:"", dayRate:"", totalBilled:"", advance:"", outstanding:"" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Contractor" : "New Contractor"}</h3><button class="icon-btn" id="closeCF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field col-span-2"><label>Contractor Name</label><input id="c_name" value="${f.name}"/></div>
+          <div class="field"><label>Trade</label><select id="c_trade">${TRADES.map(t=>`<option ${t===f.trade?"selected":""}>${t}</option>`).join("")}</select></div>
+          <div class="field"><label>Project</label><select id="c_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select></div>
+          <div class="field"><label>Workers</label><input type="number" id="c_workers" value="${f.workers}"/></div>
+          <div class="field"><label>Day Rate (₹)</label><input type="number" id="c_dayRate" value="${f.dayRate}"/></div>
+          <div class="field"><label>Total Billed (₹)</label><input type="number" id="c_totalBilled" value="${f.totalBilled}"/></div>
+          <div class="field"><label>Advance Paid (₹)</label><input type="number" id="c_advance" value="${f.advance}"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelCF">Cancel</button>
+          <button class="btn-primary" id="saveCF">${isEdit ? "Save Changes" : "Create Contractor"}</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeCF").addEventListener("click", closeModal);
+  node.querySelector("#cancelCF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveCF").addEventListener("click", ()=>{
+    const totalBilled = Number(node.querySelector("#c_totalBilled").value) || 0;
+    const advance = Number(node.querySelector("#c_advance").value) || 0;
+    const payload = {
+      name: node.querySelector("#c_name").value.trim() || "Unnamed Contractor",
+      trade: node.querySelector("#c_trade").value,
+      project: node.querySelector("#c_project").value,
+      workers: Number(node.querySelector("#c_workers").value) || 0,
+      dayRate: Number(node.querySelector("#c_dayRate").value) || 0,
+      totalBilled, advance,
+      outstanding: Math.max(0, totalBilled - advance),
+    };
+    if (isEdit){
+      Object.assign(contractor, payload);
+      showToast(`${contractor.name} updated`);
+    } else {
+      const id = `CTR-${String(CONTRACTORS.length+1).padStart(2,"0")}`;
+      CONTRACTORS = [{ id, ...payload }, ...CONTRACTORS];
+      showToast(`${payload.name} added`);
+    }
+    closeModal();
+    renderContractorsList();
+  });
+  openModalNode(node);
+}
+
+function openContractorPaymentModal(contractor){
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Record Payment — ${contractor.name}</h3><button class="icon-btn" id="closePM"><i data-lucide="x"></i></button></div>
+        <div class="modal-body">
+          <div class="field"><label>Outstanding Amount</label><input type="text" value="${fmtINR(contractor.outstanding)}" disabled style="background:#F8FAFC;color:#64748b"/></div>
+          <div class="field"><label>Payment Amount (₹)</label><input type="number" id="pm_amount" placeholder="Enter amount"/></div>
+          <div class="field"><label>Payment Type</label><select id="pm_type"><option>Advance</option><option>Bill Settlement</option></select></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelPM">Cancel</button>
+          <button class="btn-primary" id="savePM">Save Payment</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closePM").addEventListener("click", closeModal);
+  node.querySelector("#cancelPM").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#savePM").addEventListener("click", ()=>{
+    const amt = Number(node.querySelector("#pm_amount").value) || 0;
+    contractor.advance += amt;
+    contractor.outstanding = Math.max(0, contractor.totalBilled - contractor.advance);
+    closeModal();
+    showToast(`Payment of ${fmtINR(amt)} recorded for ${contractor.name}`);
+    renderContractorsList();
+  });
+  openModalNode(node);
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -1306,6 +1664,7 @@ function renderAll(){
   else if (state.active === "Projects") renderProjectsModule();
   else if (state.active === "BOQ & Estimation") renderBoqModule();
   else if (state.active === "Purchase & Material") renderPurchaseModule();
+  else if (state.active === "Labour & Contractor") renderLabourModule();
   else renderPlaceholder(state.active);
   icons();
 }
