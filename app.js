@@ -233,6 +233,28 @@ let PAYMENTS = [
   { id:"RCP-503", client:"Sobha Ltd", invoice:"INV-2007", amount:3400000*1.18*0.99, mode:"Cheque", date:"2026-07-20" },
 ];
 
+/* ---------------------------- Clients & Vendors data ---------------------------- */
+let CLIENTS = [
+  { id:"CL-01", name:"Ramesh Kohinoor", company:"Kohinoor Group", phone:"+91 98220 11223", email:"ramesh@kohinoorgroup.in", projects:["Green Park Residency"] },
+  { id:"CL-02", name:"Sanjay Lodha", company:"Lodha Developers", phone:"+91 98330 44556", email:"sanjay@lodhagroup.in", projects:["Sunrise Apartments"] },
+  { id:"CL-03", name:"Vivek Raheja", company:"Raheja Estates", phone:"+91 98440 77889", email:"vivek@rahejaestates.in", projects:["Blue Ridge Tower"] },
+  { id:"CL-04", name:"Meera Shah", company:"Silver Homes", phone:"+91 98550 22334", email:"meera@silverhomes.in", projects:["Silver County"] },
+  { id:"CL-05", name:"Arjun Mehta", company:"Prestige Group", phone:"+91 98660 55667", email:"arjun@prestigegroup.in", projects:["Emerald Business Park"] },
+  { id:"CL-06", name:"Kunal Singhania", company:"DLF Ltd", phone:"+91 98770 88990", email:"kunal@dlf.in", projects:["Metro Heights"] },
+  { id:"CL-07", name:"Priya Sobha", company:"Sobha Ltd", phone:"+91 98880 11002", email:"priya@sobhaltd.in", projects:["Palm Grove Estate"] },
+];
+
+const VENDOR_CATEGORIES = ["Cement & Building Material", "Steel & Metal", "Electrical", "Sanitaryware & Plumbing", "Tiles & Flooring", "Paint & Finishing", "Aluminium & Glazing"];
+let VENDORS = [
+  { id:"VN-01", name:"Ambuja Cement Dealers", category:"Cement & Building Material", gstin:"27AAACC1206D1ZY", phone:"+91 90210 11122" },
+  { id:"VN-02", name:"Tata Steel Distributors", category:"Steel & Metal", gstin:"27AABCT3518Q1ZV", phone:"+91 90320 22233" },
+  { id:"VN-03", name:"Ultratech Building Supplies", category:"Cement & Building Material", gstin:"27AAACL0140P1ZR", phone:"+91 90430 33344" },
+  { id:"VN-04", name:"Jindal Aluminium Co.", category:"Aluminium & Glazing", gstin:"27AAACJ4323R1Z2", phone:"+91 90540 44455" },
+  { id:"VN-05", name:"Asian Paints Trading", category:"Paint & Finishing", gstin:"27AAACA8022G1Z6", phone:"+91 90650 55566" },
+  { id:"VN-06", name:"Kajaria Tiles Depot", category:"Tiles & Flooring", gstin:"27AAACK5090L1ZW", phone:"+91 90760 66677" },
+  { id:"VN-07", name:"Jaquar Sanitaryware", category:"Sanitaryware & Plumbing", gstin:"27AAACJ7009F1Z8", phone:"+91 90870 77788" },
+];
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
@@ -240,6 +262,7 @@ const state = {
   purchase: { tab:"po", query:"", status:"All", page:1, pageSize:6 },
   labour: { tab:"attendance", query:"", page:1, pageSize:6 },
   billing: { tab:"invoices", query:"", status:"All", page:1, pageSize:6 },
+  parties: { tab:"clients", query:"" },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -1975,6 +1998,325 @@ function renderPaymentsList(){
   icons();
 }
 
+/* ---------------------------- Clients & Vendors module ---------------------------- */
+function clientOutstanding(client){
+  return INVOICES.filter(i=> i.client===client.company).reduce((s,i)=> s + invBalance(i), 0);
+}
+function clientContractValue(client){
+  return PROJECTS.filter(p=> client.projects.includes(p.name)).reduce((s,p)=> s + p.contract, 0);
+}
+function vendorOutstanding(vendor){
+  return PURCHASE_ORDERS.filter(p=> p.vendor===vendor.name && p.status!=="Cancelled").reduce((s,p)=> s + (p.status==="Delivered" ? 0 : poTotal(p)), 0);
+}
+function vendorPurchaseTotal(vendor){
+  return PURCHASE_ORDERS.filter(p=> p.vendor===vendor.name).reduce((s,p)=> s + poTotal(p), 0);
+}
+function vendorPOCount(vendor){
+  return PURCHASE_ORDERS.filter(p=> p.vendor===vendor.name).length;
+}
+
+function getFilteredClients(){
+  const { query } = state.parties;
+  return CLIENTS.filter(c => c.name.toLowerCase().includes(query.toLowerCase()) || c.company.toLowerCase().includes(query.toLowerCase()));
+}
+function getFilteredVendors(){
+  const { query } = state.parties;
+  return VENDORS.filter(v => v.name.toLowerCase().includes(query.toLowerCase()) || v.category.toLowerCase().includes(query.toLowerCase()));
+}
+
+function renderPartiesModule(){
+  const main = document.getElementById("mainContent");
+  const totalClientOutstanding = CLIENTS.reduce((s,c)=> s + clientOutstanding(c), 0);
+  const totalVendorOutstanding = VENDORS.reduce((s,v)=> s + vendorOutstanding(v), 0);
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="partiesSummary"></section>
+    <div class="flex gap-2" id="partiesTabs">
+      <button class="btn-secondary" id="tabClients">Clients</button>
+      <button class="btn-secondary" id="tabVendors">Vendors</button>
+    </div>
+    <div id="partiesTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("partiesSummary");
+  [
+    { label:"Total Clients", value:CLIENTS.length, icon:"building-2", tint:"blue" },
+    { label:"Client Outstanding", value:fmtINR(totalClientOutstanding), icon:"indian-rupee", tint:"orange" },
+    { label:"Total Vendors", value:VENDORS.length, icon:"truck", tint:"navy" },
+    { label:"Vendor Outstanding", value:fmtINR(totalVendorOutstanding), icon:"clock", tint:"green" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint] || TINT.blue;
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabClients").addEventListener("click", ()=>{ state.parties.tab="clients"; state.parties.query=""; renderPartiesTab(); });
+  document.getElementById("tabVendors").addEventListener("click", ()=>{ state.parties.tab="vendors"; state.parties.query=""; renderPartiesTab(); });
+
+  renderPartiesTab();
+  icons();
+}
+
+function renderPartiesTab(){
+  document.getElementById("tabClients").classList.toggle("btn-primary", state.parties.tab==="clients");
+  document.getElementById("tabClients").classList.toggle("btn-secondary", state.parties.tab!=="clients");
+  document.getElementById("tabVendors").classList.toggle("btn-primary", state.parties.tab==="vendors");
+  document.getElementById("tabVendors").classList.toggle("btn-secondary", state.parties.tab!=="vendors");
+  if (state.parties.tab === "vendors") renderVendorsTab(); else renderClientsTab();
+  icons();
+}
+
+function renderClientsTab(){
+  const body = document.getElementById("partiesTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="clientSearch" placeholder="Search client or company…" value="${state.parties.query}"/></div>
+      <button class="btn-primary" id="newClientBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Client</button>
+    </div>
+    <p class="tiny muted mt-2" id="clientResultCount"></p>
+    <div class="grid grid-3 mt-2" id="clientCards"></div>
+  `;
+  document.getElementById("clientSearch").addEventListener("input", (e)=>{ state.parties.query=e.target.value; renderClientsList(); });
+  document.getElementById("newClientBtn").addEventListener("click", ()=> openClientFormModal(null));
+  renderClientsList();
+  icons();
+}
+
+function renderClientsList(){
+  const filtered = getFilteredClients();
+  document.getElementById("clientResultCount").textContent = `${filtered.length} clients found`;
+  const wrap = document.getElementById("clientCards");
+  wrap.innerHTML = "";
+  filtered.forEach(c=>{
+    const outstanding = clientOutstanding(c);
+    const contractValue = clientContractValue(c);
+    wrap.appendChild(el(`
+      <div class="card proj-card">
+        <div class="flex-between" style="align-items:flex-start;margin-bottom:6px">
+          <div><p style="font-weight:600;font-size:13px;margin:0">${c.company}</p><p style="font-size:11px;color:#64748b;margin:0">${c.name}</p></div>
+        </div>
+        <p class="tiny muted" style="margin:0 0 10px">${c.phone} · ${c.email}</p>
+        <div class="module-rows" style="margin:0 0 10px">
+          <div><p class="k">Projects</p><p class="v" style="font-size:12px">${c.projects.join(", ")||"—"}</p></div>
+          <div><p class="k">Contract Value</p><p class="v">${fmtINR(contractValue)}</p></div>
+        </div>
+        <p class="small"><span class="muted">Outstanding:</span> <span class="bold" style="color:${outstanding>0?'#DC2626':'#16A34A'}">${fmtINR(outstanding)}</span></p>
+        <div class="row-actions mt-2" style="border-top:1px solid #F1F5F9;padding-top:8px">
+          <button class="icon-action" data-act="history" data-id="${c.id}" title="Payment History"><i data-lucide="history"></i></button>
+          <button class="icon-action edit" data-act="edit" data-id="${c.id}"><i data-lucide="pencil"></i></button>
+          <button class="icon-action del" data-act="del" data-id="${c.id}"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`));
+  });
+  wrap.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openClientFormModal(CLIENTS.find(c=>c.id===b.dataset.id))));
+  wrap.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    CLIENTS = CLIENTS.filter(c=>c.id!==b.dataset.id);
+    showToast("Client removed");
+    renderClientsList();
+  }));
+  wrap.querySelectorAll("[data-act='history']").forEach(b=> b.addEventListener("click", ()=> openClientHistoryModal(CLIENTS.find(c=>c.id===b.dataset.id))));
+  icons();
+}
+
+function openClientFormModal(client){
+  const isEdit = !!client;
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const f = client || { name:"", company:"", phone:"", email:"", projects:[] };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Client" : "New Client"}</h3><button class="icon-btn" id="closeCLF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>Contact Name</label><input id="cl_name" value="${f.name}"/></div>
+          <div class="field"><label>Company</label><input id="cl_company" value="${f.company}"/></div>
+          <div class="field"><label>Phone</label><input id="cl_phone" value="${f.phone}"/></div>
+          <div class="field"><label>Email</label><input id="cl_email" value="${f.email}"/></div>
+          <div class="field col-span-2"><label>Project</label>
+            <select id="cl_project">${projectNames.map(p=>`<option ${f.projects.includes(p)?"selected":""}>${p}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelCLF">Cancel</button>
+          <button class="btn-primary" id="saveCLF">${isEdit ? "Save Changes" : "Add Client"}</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeCLF").addEventListener("click", closeModal);
+  node.querySelector("#cancelCLF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveCLF").addEventListener("click", ()=>{
+    const payload = {
+      name: node.querySelector("#cl_name").value.trim() || "Unnamed Contact",
+      company: node.querySelector("#cl_company").value.trim() || "Unnamed Company",
+      phone: node.querySelector("#cl_phone").value.trim(),
+      email: node.querySelector("#cl_email").value.trim(),
+      projects: [node.querySelector("#cl_project").value],
+    };
+    if (isEdit){
+      Object.assign(client, payload);
+      showToast(`${client.company} updated`);
+    } else {
+      const id = `CL-${String(CLIENTS.length+1).padStart(2,"0")}`;
+      CLIENTS = [{ id, ...payload }, ...CLIENTS];
+      showToast(`${payload.company} added`);
+    }
+    closeModal();
+    renderClientsList();
+  });
+  openModalNode(node);
+}
+
+function openClientHistoryModal(client){
+  const invs = INVOICES.filter(i=> i.client===client.company);
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>Payment History — ${client.company}</h3><button class="icon-btn" id="closeCH"><i data-lucide="x"></i></button></div>
+        <div class="modal-body">
+          ${invs.length===0 ? `<p class="small muted">No invoices recorded for this client yet.</p>` :
+            `<div style="overflow-x:auto"><table>
+              <thead><tr><th>Invoice</th><th>Project</th><th>Net Payable</th><th>Balance</th><th>Status</th></tr></thead>
+              <tbody>${invs.map(i=>`<tr>
+                <td style="font-weight:600">${i.id}</td><td>${i.project}</td><td>${fmtINR(invNet(i))}</td>
+                <td style="color:${invBalance(i)>0?'#DC2626':'#16A34A'}">${fmtINR(invBalance(i))}</td><td>${invPillHTML(i.status)}</td>
+              </tr>`).join("")}</tbody>
+            </table></div>`}
+        </div>
+        <div class="modal-foot"><button class="btn-secondary" id="closeCH2">Close</button></div>
+      </div>
+    </div>`);
+  node.querySelector("#closeCH").addEventListener("click", closeModal);
+  node.querySelector("#closeCH2").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  openModalNode(node);
+  icons();
+}
+
+function renderVendorsTab(){
+  const body = document.getElementById("partiesTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="vendorSearch" placeholder="Search vendor or category…" value="${state.parties.query}"/></div>
+      <button class="btn-primary" id="newVendorBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Vendor</button>
+    </div>
+    <p class="tiny muted mt-2" id="vendorResultCount"></p>
+    <div class="grid grid-3 mt-2" id="vendorCards"></div>
+  `;
+  document.getElementById("vendorSearch").addEventListener("input", (e)=>{ state.parties.query=e.target.value; renderVendorsList(); });
+  document.getElementById("newVendorBtn").addEventListener("click", ()=> openVendorFormModal(null));
+  renderVendorsList();
+  icons();
+}
+
+function renderVendorsList(){
+  const filtered = getFilteredVendors();
+  document.getElementById("vendorResultCount").textContent = `${filtered.length} vendors found`;
+  const wrap = document.getElementById("vendorCards");
+  wrap.innerHTML = "";
+  filtered.forEach(v=>{
+    const outstanding = vendorOutstanding(v);
+    const total = vendorPurchaseTotal(v);
+    wrap.appendChild(el(`
+      <div class="card proj-card">
+        <div class="flex-between" style="align-items:flex-start;margin-bottom:6px">
+          <div><p style="font-weight:600;font-size:13px;margin:0">${v.name}</p><p style="font-size:11px;color:#64748b;margin:0">${v.category}</p></div>
+        </div>
+        <p class="tiny muted" style="margin:0 0 10px">GSTIN: ${v.gstin} · ${v.phone}</p>
+        <div class="module-rows" style="margin:0 0 10px">
+          <div><p class="k">Purchase Orders</p><p class="v">${vendorPOCount(v)}</p></div>
+          <div><p class="k">Purchase Value</p><p class="v">${fmtINR(total)}</p></div>
+        </div>
+        <p class="small"><span class="muted">Outstanding:</span> <span class="bold" style="color:${outstanding>0?'#DC2626':'#16A34A'}">${fmtINR(outstanding)}</span></p>
+        <div class="row-actions mt-2" style="border-top:1px solid #F1F5F9;padding-top:8px">
+          <button class="icon-action" data-act="history" data-id="${v.id}" title="Purchase History"><i data-lucide="history"></i></button>
+          <button class="icon-action edit" data-act="edit" data-id="${v.id}"><i data-lucide="pencil"></i></button>
+          <button class="icon-action del" data-act="del" data-id="${v.id}"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`));
+  });
+  wrap.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openVendorFormModal(VENDORS.find(v=>v.id===b.dataset.id))));
+  wrap.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    VENDORS = VENDORS.filter(v=>v.id!==b.dataset.id);
+    showToast("Vendor removed");
+    renderVendorsList();
+  }));
+  wrap.querySelectorAll("[data-act='history']").forEach(b=> b.addEventListener("click", ()=> openVendorHistoryModal(VENDORS.find(v=>v.id===b.dataset.id))));
+  icons();
+}
+
+function openVendorFormModal(vendor){
+  const isEdit = !!vendor;
+  const f = vendor || { name:"", category:VENDOR_CATEGORIES[0], gstin:"", phone:"" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Vendor" : "New Vendor"}</h3><button class="icon-btn" id="closeVF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field col-span-2"><label>Vendor Name</label><input id="v_name" value="${f.name}"/></div>
+          <div class="field"><label>Category</label><select id="v_category">${VENDOR_CATEGORIES.map(c=>`<option ${c===f.category?"selected":""}>${c}</option>`).join("")}</select></div>
+          <div class="field"><label>Phone</label><input id="v_phone" value="${f.phone}"/></div>
+          <div class="field col-span-2"><label>GSTIN</label><input id="v_gstin" value="${f.gstin}"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelVF">Cancel</button>
+          <button class="btn-primary" id="saveVF">${isEdit ? "Save Changes" : "Add Vendor"}</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeVF").addEventListener("click", closeModal);
+  node.querySelector("#cancelVF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveVF").addEventListener("click", ()=>{
+    const payload = {
+      name: node.querySelector("#v_name").value.trim() || "Unnamed Vendor",
+      category: node.querySelector("#v_category").value,
+      phone: node.querySelector("#v_phone").value.trim(),
+      gstin: node.querySelector("#v_gstin").value.trim(),
+    };
+    if (isEdit){
+      Object.assign(vendor, payload);
+      showToast(`${vendor.name} updated`);
+    } else {
+      const id = `VN-${String(VENDORS.length+1).padStart(2,"0")}`;
+      VENDORS = [{ id, ...payload }, ...VENDORS];
+      showToast(`${payload.name} added`);
+    }
+    closeModal();
+    renderVendorsList();
+  });
+  openModalNode(node);
+}
+
+function openVendorHistoryModal(vendor){
+  const pos = PURCHASE_ORDERS.filter(p=> p.vendor===vendor.name);
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>Purchase History — ${vendor.name}</h3><button class="icon-btn" id="closeVH"><i data-lucide="x"></i></button></div>
+        <div class="modal-body">
+          ${pos.length===0 ? `<p class="small muted">No purchase orders recorded for this vendor yet.</p>` :
+            `<div style="overflow-x:auto"><table>
+              <thead><tr><th>PO No.</th><th>Material</th><th>Project</th><th>Total</th><th>Status</th></tr></thead>
+              <tbody>${pos.map(p=>`<tr>
+                <td style="font-weight:600">${p.id}</td><td>${p.material}</td><td>${p.project}</td>
+                <td>${fmtINR(poTotal(p))}</td><td>${poPillHTML(p.status)}</td>
+              </tr>`).join("")}</tbody>
+            </table></div>`}
+        </div>
+        <div class="modal-foot"><button class="btn-secondary" id="closeVH2">Close</button></div>
+      </div>
+    </div>`);
+  node.querySelector("#closeVH").addEventListener("click", closeModal);
+  node.querySelector("#closeVH2").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  openModalNode(node);
+  icons();
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -2000,6 +2342,7 @@ function renderAll(){
   else if (state.active === "Purchase & Material") renderPurchaseModule();
   else if (state.active === "Labour & Contractor") renderLabourModule();
   else if (state.active === "Billing & Accounts") renderBillingModule();
+  else if (state.active === "Clients & Vendors") renderPartiesModule();
   else renderPlaceholder(state.active);
   icons();
 }
