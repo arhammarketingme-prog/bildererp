@@ -255,6 +255,46 @@ let VENDORS = [
   { id:"VN-07", name:"Jaquar Sanitaryware", category:"Sanitaryware & Plumbing", gstin:"27AAACJ7009F1Z8", phone:"+91 90870 77788" },
 ];
 
+/* ---------------------------- Site Management data ---------------------------- */
+const ISSUE_SEV_META = {
+  "Low": {fg:"#64748B", bg:"#F1F5F9"},
+  "Medium": {fg:"#EA580C", bg:"#FFEDD5"},
+  "High": {fg:"#DC2626", bg:"#FEE2E2"},
+};
+const ISSUE_STATUS_META = {
+  "Open": {fg:"#2563EB", bg:"#DBEAFE"},
+  "In Progress": {fg:"#EA580C", bg:"#FFEDD5"},
+  "Resolved": {fg:"#16A34A", bg:"#DCFCE7"},
+};
+const WEATHER_OPTIONS = ["Clear", "Cloudy", "Rain", "Extreme Heat"];
+
+let SITE_ENGINEERS = {
+  "Green Park Residency": "Rohit Sharma",
+  "Sunrise Apartments": "Anita Deshmukh",
+  "Blue Ridge Tower": "Vikram Patil",
+  "Silver County": "Rohit Sharma",
+  "Emerald Business Park": "Sneha Kulkarni",
+  "Riverfront Villas": "Anita Deshmukh",
+  "Metro Heights": "Vikram Patil",
+  "Palm Grove Estate": "Sneha Kulkarni",
+};
+
+let DPRS = [
+  { id:"DPR-101", date:"2026-08-14", site:"Green Park Residency", weather:"Clear", manpower:30, workDone:"Completed shuttering for 3rd floor slab, started rebar tying for column C12-C18.", materialNotes:"120 cement bags, 8 Cum sand consumed", notes:"Minor delay due to concrete pump breakdown, resolved by evening." },
+  { id:"DPR-102", date:"2026-08-14", site:"Blue Ridge Tower", weather:"Cloudy", manpower:16, workDone:"Structural steel erection on Level 6 completed, welding inspection pending.", materialNotes:"2.5 Ton structural steel used", notes:"Welding inspector to visit tomorrow morning." },
+  { id:"DPR-103", date:"2026-08-13", site:"Sunrise Apartments", weather:"Rain", manpower:11, workDone:"Internal plastering paused due to rain, waterproofing check on terrace.", materialNotes:"No major consumption today", notes:"Site partially waterlogged near Block B entrance, pump deployed." },
+  { id:"DPR-104", date:"2026-08-13", site:"Silver County", weather:"Clear", manpower:14, workDone:"Vitrified tile laying completed for Tower 2, Floor 4.", materialNotes:"620 Sqm tiles, 40 bags tile adhesive", notes:"Quality check passed for grouting finish." },
+  { id:"DPR-105", date:"2026-08-12", site:"Metro Heights", weather:"Extreme Heat", manpower:20, workDone:"External painting first coat on North facade.", materialNotes:"180 Ltr emulsion paint used", notes:"Work paused 1-3pm due to heat, resumed evening shift." },
+];
+
+let ISSUES = [
+  { id:"ISS-201", site:"Green Park Residency", title:"Scaffolding instability near Block A", category:"Safety Incident", severity:"High", status:"In Progress", reportedBy:"Rohit Sharma", date:"2026-08-13" },
+  { id:"ISS-202", site:"Blue Ridge Tower", title:"Delay in structural steel delivery", category:"Material Delay", severity:"Medium", status:"Open", reportedBy:"Vikram Patil", date:"2026-08-12" },
+  { id:"ISS-203", site:"Sunrise Apartments", title:"Water seepage near Block B basement", category:"Site Issue", severity:"Medium", status:"Open", reportedBy:"Anita Deshmukh", date:"2026-08-13" },
+  { id:"ISS-204", site:"Emerald Business Park", title:"Worker minor injury - hand laceration", category:"Safety Incident", severity:"Low", status:"Resolved", reportedBy:"Sneha Kulkarni", date:"2026-08-05" },
+  { id:"ISS-205", site:"Metro Heights", title:"Crane operator certification expired", category:"Compliance", severity:"High", status:"Resolved", reportedBy:"Vikram Patil", date:"2026-08-01" },
+];
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
@@ -263,6 +303,7 @@ const state = {
   labour: { tab:"attendance", query:"", page:1, pageSize:6 },
   billing: { tab:"invoices", query:"", status:"All", page:1, pageSize:6 },
   parties: { tab:"clients", query:"" },
+  site: { tab:"overview", query:"" },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -2317,6 +2358,308 @@ function openVendorHistoryModal(vendor){
   icons();
 }
 
+/* ---------------------------- Site Management module ---------------------------- */
+function issueSevPillHTML(sev){
+  const m = ISSUE_SEV_META[sev] || ISSUE_SEV_META["Low"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${sev}</span>`;
+}
+function issueStatusPillHTML(status){
+  const m = ISSUE_STATUS_META[status] || ISSUE_STATUS_META["Open"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${status}</span>`;
+}
+function siteLastDPR(siteName){
+  const rows = DPRS.filter(d=>d.site===siteName).sort((a,b)=> b.date.localeCompare(a.date));
+  return rows[0] || null;
+}
+function siteOpenIssues(siteName){
+  return ISSUES.filter(i=> i.site===siteName && i.status!=="Resolved").length;
+}
+function siteTodayManpower(siteName){
+  const rows = ATTENDANCE.filter(a=> a.project===siteName && a.date==="2026-08-14");
+  return rows.reduce((s,a)=> s+a.present, 0);
+}
+
+function getFilteredDPRs(){
+  const { query } = state.site;
+  return [...DPRS].filter(d=> d.site.toLowerCase().includes(query.toLowerCase())).sort((a,b)=> b.date.localeCompare(a.date));
+}
+function getFilteredIssues(){
+  const { query } = state.site;
+  return [...ISSUES].filter(i=> i.site.toLowerCase().includes(query.toLowerCase()) || i.title.toLowerCase().includes(query.toLowerCase())).sort((a,b)=> b.date.localeCompare(a.date));
+}
+
+function renderSiteModule(){
+  const main = document.getElementById("mainContent");
+  const totalSites = Object.keys(SITE_ENGINEERS).length;
+  const openIssues = ISSUES.filter(i=>i.status!=="Resolved").length;
+  const highSevIssues = ISSUES.filter(i=>i.severity==="High" && i.status!=="Resolved").length;
+  const dprToday = DPRS.filter(d=>d.date==="2026-08-14").length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="siteSummary"></section>
+    <div class="flex gap-2" id="siteTabs">
+      <button class="btn-secondary" id="tabOverview">Sites Overview</button>
+      <button class="btn-secondary" id="tabDPR">Daily Progress Reports</button>
+      <button class="btn-secondary" id="tabIssues">Issues & Safety</button>
+    </div>
+    <div id="siteTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("siteSummary");
+  [
+    { label:"Total Sites", value:totalSites, icon:"map-pin", tint:"blue" },
+    { label:"DPRs Filed Today", value:dprToday, icon:"clipboard-list", tint:"green" },
+    { label:"Open Issues", value:openIssues, icon:"alert-circle", tint:"navy" },
+    { label:"High Severity Open", value:highSevIssues, icon:"shield-alert", tint:"orange" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabOverview").addEventListener("click", ()=>{ state.site.tab="overview"; state.site.query=""; renderSiteTab(); });
+  document.getElementById("tabDPR").addEventListener("click", ()=>{ state.site.tab="dpr"; state.site.query=""; renderSiteTab(); });
+  document.getElementById("tabIssues").addEventListener("click", ()=>{ state.site.tab="issues"; state.site.query=""; renderSiteTab(); });
+
+  renderSiteTab();
+  icons();
+}
+
+function renderSiteTab(){
+  ["tabOverview","tabDPR","tabIssues"].forEach(id=>{
+    const tabKey = id==="tabOverview"?"overview": id==="tabDPR"?"dpr":"issues";
+    document.getElementById(id).classList.toggle("btn-primary", state.site.tab===tabKey);
+    document.getElementById(id).classList.toggle("btn-secondary", state.site.tab!==tabKey);
+  });
+  if (state.site.tab==="overview") renderSiteOverviewTab();
+  else if (state.site.tab==="dpr") renderDPRTab();
+  else renderIssuesTab();
+  icons();
+}
+
+function renderSiteOverviewTab(){
+  const body = document.getElementById("siteTabBody");
+  body.innerHTML = `<div class="grid grid-3 mt-3" id="siteCards"></div>`;
+  const wrap = document.getElementById("siteCards");
+  Object.entries(SITE_ENGINEERS).forEach(([site, engineer])=>{
+    const last = siteLastDPR(site);
+    const openIssues = siteOpenIssues(site);
+    const manpower = siteTodayManpower(site);
+    wrap.appendChild(el(`
+      <div class="card proj-card">
+        <div class="flex-between" style="align-items:flex-start;margin-bottom:6px">
+          <div><p style="font-weight:600;font-size:13px;margin:0">${site}</p><p style="font-size:11px;color:#64748b;margin:0">Engineer: ${engineer}</p></div>
+          ${openIssues>0 ? `<span class="pill" style="color:#DC2626;background:#FEE2E2"><span class="dot-sm" style="background:#DC2626"></span>${openIssues} issue${openIssues>1?"s":""}</span>` : `<span class="pill" style="color:#16A34A;background:#DCFCE7"><span class="dot-sm" style="background:#16A34A"></span>Clear</span>`}
+        </div>
+        <div class="module-rows" style="margin:10px 0">
+          <div><p class="k">Manpower Today</p><p class="v">${manpower}</p></div>
+          <div><p class="k">Last DPR</p><p class="v" style="font-size:12px">${last ? last.date : "—"}</p></div>
+        </div>
+        ${last ? `<p class="tiny muted" style="margin:0 0 10px;line-height:1.4">${last.workDone.slice(0,90)}${last.workDone.length>90?"…":""}</p>` : `<p class="tiny muted" style="margin:0 0 10px">No progress report filed yet.</p>`}
+        <button class="link-btn" data-act="viewdpr" data-site="${site}">View Reports <i data-lucide="arrow-right" style="width:13px;height:13px"></i></button>
+      </div>`));
+  });
+  wrap.querySelectorAll("[data-act='viewdpr']").forEach(b=> b.addEventListener("click", ()=>{
+    state.site.tab="dpr"; state.site.query=b.dataset.site; renderSiteTab();
+  }));
+  icons();
+}
+
+function renderDPRTab(){
+  const body = document.getElementById("siteTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="dprSearch" placeholder="Search by site…" value="${state.site.query}"/></div>
+      <button class="btn-primary" id="newDPRBtn"><i data-lucide="camera" style="width:15px;height:15px"></i>Site Upload / New DPR</button>
+    </div>
+    <p class="tiny muted mt-2" id="dprResultCount"></p>
+    <div class="flex-col gap-3 mt-2" id="dprList"></div>
+  `;
+  document.getElementById("dprSearch").addEventListener("input", (e)=>{ state.site.query=e.target.value; renderDPRList(); });
+  document.getElementById("newDPRBtn").addEventListener("click", ()=> openDPRFormModal());
+  renderDPRList();
+  icons();
+}
+
+function renderDPRList(){
+  const filtered = getFilteredDPRs();
+  document.getElementById("dprResultCount").textContent = `${filtered.length} daily progress reports found`;
+  const wrap = document.getElementById("dprList");
+  wrap.innerHTML = "";
+  if (filtered.length===0){
+    wrap.innerHTML = `<div class="card" style="padding:24px;text-align:center;color:#94a3b8;font-size:13px">No progress reports match your search.</div>`;
+  }
+  filtered.forEach(d=>{
+    wrap.appendChild(el(`
+      <div class="card" style="padding:16px">
+        <div class="flex-between" style="align-items:flex-start">
+          <div>
+            <p style="font-weight:600;font-size:13px;margin:0">${d.site}</p>
+            <p class="tiny muted" style="margin:2px 0 0">${d.date} · ${d.weather} · ${d.manpower} workers on site</p>
+          </div>
+          <button class="icon-action del" data-id="${d.id}"><i data-lucide="trash-2"></i></button>
+        </div>
+        <p class="small" style="margin:10px 0 6px"><span class="bold">Work Completed:</span> ${d.workDone}</p>
+        <p class="small muted" style="margin:0 0 6px"><span class="bold" style="color:#475569">Material Consumption:</span> ${d.materialNotes}</p>
+        <p class="small muted" style="margin:0"><span class="bold" style="color:#475569">Engineer Notes:</span> ${d.notes}</p>
+      </div>`));
+  });
+  wrap.querySelectorAll(".icon-action.del").forEach(b=> b.addEventListener("click", ()=>{
+    DPRS = DPRS.filter(d=>d.id!==b.dataset.id);
+    showToast("Progress report deleted");
+    renderDPRList();
+  }));
+  icons();
+}
+
+function openDPRFormModal(){
+  const siteNames = Object.keys(SITE_ENGINEERS);
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>New Daily Progress Report</h3><button class="icon-btn" id="closeDF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>Site / Project</label><select id="d_site">${siteNames.map(s=>`<option>${s}</option>`).join("")}</select></div>
+          <div class="field"><label>Date</label><input type="date" id="d_date" value="2026-08-15"/></div>
+          <div class="field"><label>Weather</label><select id="d_weather">${WEATHER_OPTIONS.map(w=>`<option>${w}</option>`).join("")}</select></div>
+          <div class="field"><label>Manpower on Site</label><input type="number" id="d_manpower" placeholder="e.g. 25"/></div>
+          <div class="field col-span-2"><label>Work Completed Today</label><input id="d_workDone" placeholder="Describe today's progress"/></div>
+          <div class="field col-span-2"><label>Material Consumption</label><input id="d_materialNotes" placeholder="e.g. 100 cement bags, 5 Cum sand"/></div>
+          <div class="field col-span-2"><label>Engineer Notes</label><input id="d_notes" placeholder="Any observations, delays, or remarks"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelDF">Cancel</button>
+          <button class="btn-primary" id="saveDF">Save Report</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeDF").addEventListener("click", closeModal);
+  node.querySelector("#cancelDF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveDF").addEventListener("click", ()=>{
+    const site = node.querySelector("#d_site").value;
+    const payload = {
+      site,
+      date: node.querySelector("#d_date").value,
+      weather: node.querySelector("#d_weather").value,
+      manpower: Number(node.querySelector("#d_manpower").value) || 0,
+      workDone: node.querySelector("#d_workDone").value.trim() || "No details provided.",
+      materialNotes: node.querySelector("#d_materialNotes").value.trim() || "—",
+      notes: node.querySelector("#d_notes").value.trim() || "—",
+    };
+    const id = `DPR-${101 + DPRS.length}`;
+    DPRS = [{ id, ...payload }, ...DPRS];
+    closeModal();
+    showToast(`Progress report saved for ${site}`);
+    if (state.site.tab==="dpr") renderDPRList();
+  });
+  openModalNode(node);
+}
+
+function renderIssuesTab(){
+  const body = document.getElementById("siteTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="issueSearch" placeholder="Search by site or issue…" value="${state.site.query}"/></div>
+      <button class="btn-primary" id="newIssueBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>Report Issue</button>
+    </div>
+    <p class="tiny muted mt-2" id="issueResultCount"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Site</th><th>Issue</th><th>Category</th><th>Severity</th><th>Status</th><th>Reported By</th><th>Date</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody id="issueTbody"></tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("issueSearch").addEventListener("input", (e)=>{ state.site.query=e.target.value; renderIssuesList(); });
+  document.getElementById("newIssueBtn").addEventListener("click", ()=> openIssueFormModal());
+  renderIssuesList();
+  icons();
+}
+
+function renderIssuesList(){
+  const filtered = getFilteredIssues();
+  document.getElementById("issueResultCount").textContent = `${filtered.length} issues found`;
+  const tbody = document.getElementById("issueTbody");
+  tbody.innerHTML = "";
+  if (filtered.length===0){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No issues match your search.</td></tr>`;
+  }
+  filtered.forEach(i=>{
+    tbody.appendChild(el(`<tr>
+      <td style="font-weight:600">${i.site}</td>
+      <td>${i.title}</td>
+      <td class="tiny">${i.category}</td>
+      <td>${issueSevPillHTML(i.severity)}</td>
+      <td>${issueStatusPillHTML(i.status)}</td>
+      <td class="tiny">${i.reportedBy}</td>
+      <td class="tiny">${i.date}</td>
+      <td><div class="row-actions">
+        ${i.status!=="Resolved" ? `<button class="icon-action" data-id="${i.id}" data-act="resolve" title="Mark Resolved"><i data-lucide="check" style="color:#16A34A"></i></button>` : ""}
+        <button class="icon-action del" data-id="${i.id}" data-act="del"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='resolve']").forEach(b=> b.addEventListener("click", ()=>{
+    const issue = ISSUES.find(i=>i.id===b.dataset.id);
+    issue.status = "Resolved";
+    showToast(`${issue.id} marked resolved`);
+    renderIssuesList();
+  }));
+  tbody.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    ISSUES = ISSUES.filter(i=>i.id!==b.dataset.id);
+    showToast("Issue removed");
+    renderIssuesList();
+  }));
+  icons();
+}
+
+function openIssueFormModal(){
+  const siteNames = Object.keys(SITE_ENGINEERS);
+  const categories = ["Safety Incident", "Material Delay", "Site Issue", "Compliance", "Quality"];
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>Report Issue</h3><button class="icon-btn" id="closeISF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>Site / Project</label><select id="is_site">${siteNames.map(s=>`<option>${s}</option>`).join("")}</select></div>
+          <div class="field"><label>Category</label><select id="is_category">${categories.map(c=>`<option>${c}</option>`).join("")}</select></div>
+          <div class="field col-span-2"><label>Issue Title</label><input id="is_title" placeholder="Briefly describe the issue"/></div>
+          <div class="field"><label>Severity</label><select id="is_severity">${Object.keys(ISSUE_SEV_META).map(s=>`<option>${s}</option>`).join("")}</select></div>
+          <div class="field"><label>Reported By</label><input id="is_reportedBy" placeholder="Engineer / Supervisor name"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelISF">Cancel</button>
+          <button class="btn-primary" id="saveISF">Save Issue</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeISF").addEventListener("click", closeModal);
+  node.querySelector("#cancelISF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveISF").addEventListener("click", ()=>{
+    const payload = {
+      site: node.querySelector("#is_site").value,
+      title: node.querySelector("#is_title").value.trim() || "Untitled Issue",
+      category: node.querySelector("#is_category").value,
+      severity: node.querySelector("#is_severity").value,
+      status: "Open",
+      reportedBy: node.querySelector("#is_reportedBy").value.trim() || "Unknown",
+      date: "2026-08-15",
+    };
+    const id = `ISS-${201 + ISSUES.length}`;
+    ISSUES = [{ id, ...payload }, ...ISSUES];
+    closeModal();
+    showToast(`Issue reported for ${payload.site}`);
+    if (state.site.tab==="issues") renderIssuesList();
+  });
+  openModalNode(node);
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -2343,6 +2686,7 @@ function renderAll(){
   else if (state.active === "Labour & Contractor") renderLabourModule();
   else if (state.active === "Billing & Accounts") renderBillingModule();
   else if (state.active === "Clients & Vendors") renderPartiesModule();
+  else if (state.active === "Site Management") renderSiteModule();
   else renderPlaceholder(state.active);
   icons();
 }
