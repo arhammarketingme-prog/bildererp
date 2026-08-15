@@ -304,6 +304,7 @@ const state = {
   billing: { tab:"invoices", query:"", status:"All", page:1, pageSize:6 },
   parties: { tab:"clients", query:"" },
   site: { tab:"overview", query:"" },
+  reports: { active:"cost", project:"All" },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -2660,6 +2661,204 @@ function openIssueFormModal(){
   openModalNode(node);
 }
 
+/* ---------------------------- Reports & Analytics module ---------------------------- */
+const REPORT_DEFS = [
+  {
+    id:"cost", title:"Project Cost Report", icon:"indian-rupee",
+    desc:"Contract value vs billed amount and completion by project.",
+    columns:[["name","Project"],["client","Client"],["contract","Contract Value",true],["billed","Billed Amount",true],["completion","Completion %"]],
+    rows:()=> PROJECTS.map(p=>({ name:p.name, client:p.client, project:p.name, contract:p.contract, billed:p.billed, completion:p.completion+"%" })),
+  },
+  {
+    id:"profit", title:"Profitability Report", icon:"trending-up",
+    desc:"Estimated profit or loss per project (₹ Lakh).",
+    columns:[["name","Project"],["profitL","Profit / Loss (₹ L)"],["margin","Margin %"]],
+    rows:()=> PROJECTS.map((p,i)=>{ const val = PROFIT_VALUES[i % PROFIT_VALUES.length]; return { name:p.name, project:p.name, profitL:(val>=0?"+":"")+val+" L", margin:((val*100000)/p.contract*100).toFixed(1)+"%" }; }),
+  },
+  {
+    id:"boq", title:"BOQ Variance", icon:"calculator",
+    desc:"Estimated vs actual cost by BOQ line item.",
+    columns:[["id","BOQ No."],["item","Item"],["project","Project"],["est","Estimated",true],["actual","Actual",true],["variance","Variance",true]],
+    rows:()=> BOQS.map(b=>({ id:b.id, item:b.item, project:b.project, est:boqEstAmount(b), actual:b.actual||0, variance:boqVariance(b) })),
+  },
+  {
+    id:"purchase", title:"Purchase Report", icon:"shopping-cart",
+    desc:"All purchase orders with value and status.",
+    columns:[["id","PO No."],["vendor","Vendor"],["project","Project"],["material","Material"],["total","Total Value",true],["status","Status"]],
+    rows:()=> PURCHASE_ORDERS.map(p=>({ id:p.id, vendor:p.vendor, project:p.project, material:p.material, total:poTotal(p), status:p.status })),
+  },
+  {
+    id:"inventory", title:"Inventory Report", icon:"boxes",
+    desc:"Stock position and low-stock materials.",
+    columns:[["material","Material"],["available","Available"],["reorder","Reorder Level"],["flag","Status"]],
+    rows:()=> INVENTORY.map(i=>({ material:i.material, available:invAvailable(i)+" "+i.unit, reorder:i.reorder+" "+i.unit, flag: invLowStock(i) ? "Low Stock" : "OK" })),
+  },
+  {
+    id:"labour", title:"Labour Report", icon:"hard-hat",
+    desc:"Attendance and wage payable by contractor and date.",
+    columns:[["date","Date"],["contractor","Contractor"],["project","Project"],["present","Present"],["absent","Absent"],["wage","Wage Payable",true]],
+    rows:()=> ATTENDANCE.map(a=>({ date:a.date, contractor:a.contractor, project:a.project, present:a.present, absent:a.absent, wage:attWage(a) })),
+  },
+  {
+    id:"contractor", title:"Contractor Report", icon:"users",
+    desc:"Billing, advances, and outstanding by contractor.",
+    columns:[["name","Contractor"],["trade","Trade"],["project","Project"],["totalBilled","Total Billed",true],["advance","Advance Paid",true],["outstanding","Outstanding",true]],
+    rows:()=> CONTRACTORS.map(c=>({ name:c.name, trade:c.trade, project:c.project, totalBilled:c.totalBilled, advance:c.advance, outstanding:c.outstanding })),
+  },
+  {
+    id:"billing", title:"Billing Report", icon:"file-text",
+    desc:"All client invoices with GST, TDS, and retention.",
+    columns:[["id","Invoice"],["client","Client"],["project","Project"],["basic","Basic Amount",true],["net","Net Payable",true],["status","Status"]],
+    rows:()=> INVOICES.map(i=>({ id:i.id, client:i.client, project:i.project, basic:i.basic, net:invNet(i), status:i.status })),
+  },
+  {
+    id:"collection", title:"Collection Report", icon:"credit-card",
+    desc:"All payments received from clients.",
+    columns:[["id","Receipt No."],["client","Client"],["invoice","Invoice Ref."],["amount","Amount",true],["mode","Mode"],["date","Date"]],
+    rows:()=> PAYMENTS.map(p=>({ id:p.id, client:p.client, invoice:p.invoice, amount:p.amount, mode:p.mode, date:p.date })),
+  },
+  {
+    id:"outstanding", title:"Outstanding Report", icon:"clock",
+    desc:"Invoices with a pending balance, oldest first.",
+    columns:[["id","Invoice"],["client","Client"],["project","Project"],["balance","Balance Due",true],["dueDate","Due Date"],["status","Status"]],
+    rows:()=> INVOICES.filter(i=> invBalance(i)>0).sort((a,b)=> a.dueDate.localeCompare(b.dueDate)).map(i=>({ id:i.id, client:i.client, project:i.project, balance:invBalance(i), dueDate:i.dueDate, status:i.status })),
+  },
+  {
+    id:"cashflow", title:"Cash Flow Report", icon:"trending-up",
+    desc:"Monthly cash inflow vs outflow (₹ Crore).",
+    columns:[["month","Month"],["inflow","Inflow (₹ Cr)"],["outflow","Outflow (₹ Cr)"],["net","Net (₹ Cr)"]],
+    rows:()=> CASHFLOW_LABELS.map((m,i)=>({ month:m, inflow:CASHFLOW_IN[i], outflow:CASHFLOW_OUT[i], net:(CASHFLOW_IN[i]-CASHFLOW_OUT[i]).toFixed(2) })),
+  },
+  {
+    id:"gst", title:"GST Report", icon:"file-text",
+    desc:"Output GST (sales) vs Input GST (purchases).",
+    columns:[["ref","Reference"],["party","Party"],["type","Type"],["taxable","Taxable Value",true],["gstAmt","GST Amount",true]],
+    rows:()=> [
+      ...INVOICES.map(i=>({ ref:i.id, party:i.client, type:"Output (Sales)", taxable:i.basic, gstAmt:i.basic*(i.gst/100) })),
+      ...PURCHASE_ORDERS.map(p=>({ ref:p.id, party:p.vendor, type:"Input (Purchase)", taxable:p.qty*p.rate, gstAmt:p.qty*p.rate*(p.gst/100) })),
+    ],
+  },
+  {
+    id:"expense", title:"Expense Report", icon:"wallet",
+    desc:"Material and labour cost by project (approx.).",
+    columns:[["project","Project"],["materialCost","Material Cost",true],["labourCost","Labour Cost",true],["total","Total Expense",true]],
+    rows:()=> [...new Set(PROJECTS.map(p=>p.name))].map(proj=>{
+      const materialCost = PURCHASE_ORDERS.filter(p=>p.project===proj).reduce((s,p)=> s+poTotal(p), 0);
+      const labourCost = CONTRACTORS.filter(c=>c.project===proj).reduce((s,c)=> s+c.totalBilled, 0);
+      return { project:proj, materialCost, labourCost, total:materialCost+labourCost };
+    }),
+  },
+];
+
+function reportFmtCell(val, isCurrency){
+  if (isCurrency) return fmtINR(Number(val)||0);
+  return val;
+}
+
+function getReportDef(id){ return REPORT_DEFS.find(r=>r.id===id) || REPORT_DEFS[0]; }
+
+function renderReportsModule(){
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `
+    <div class="card" style="padding:16px">
+      <h3 class="section-title mt-0">Management Dashboard</h3>
+      <p class="tiny muted" style="margin:4px 0 12px">Top-level snapshot across all modules</p>
+      <div class="grid grid-6" id="mgmtKpis"></div>
+    </div>
+
+    <div class="flex" style="gap:16px;align-items:flex-start" id="reportsLayout">
+      <div class="card" id="reportListWrap" style="padding:10px;width:260px;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0" id="reportBody"></div>
+    </div>
+  `;
+
+  const mgmtWrap = document.getElementById("mgmtKpis");
+  [
+    { label:"Contract Value", value:fmtINR(PROJECTS.reduce((s,p)=>s+p.contract,0)), icon:"indian-rupee" },
+    { label:"Billed Amount", value:fmtINR(PROJECTS.reduce((s,p)=>s+p.billed,0)), icon:"file-text" },
+    { label:"Outstanding", value:fmtINR(INVOICES.reduce((s,i)=>s+invBalance(i),0)), icon:"clock" },
+    { label:"Purchase Value", value:fmtINR(PURCHASE_ORDERS.reduce((s,p)=>s+poTotal(p),0)), icon:"shopping-cart" },
+    { label:"Contractor Outstanding", value:fmtINR(CONTRACTORS.reduce((s,c)=>s+c.outstanding,0)), icon:"hard-hat" },
+    { label:"Open Site Issues", value:ISSUES.filter(i=>i.status!=="Resolved").length, icon:"alert-circle" },
+  ].forEach(k=>{
+    mgmtWrap.insertAdjacentHTML("beforeend", `
+      <div class="mini-kpi" style="border:1px solid #F1F5F9;border-radius:12px">
+        <div class="mini-kpi-icon"><i data-lucide="${k.icon}"></i></div>
+        <div><p class="mini-kpi-value">${k.value}</p><p class="mini-kpi-label">${k.label}</p></div>
+      </div>`);
+  });
+
+  const listWrap = document.getElementById("reportListWrap");
+  REPORT_DEFS.forEach(r=>{
+    const btn = el(`<button class="nav-item" style="color:#334155" data-id="${r.id}"><i data-lucide="${r.icon}"></i><span>${r.title}</span></button>`);
+    btn.addEventListener("click", ()=>{ state.reports.active = r.id; renderReportBody(); });
+    listWrap.appendChild(btn);
+  });
+
+  renderReportBody();
+  icons();
+}
+
+function renderReportBody(){
+  document.querySelectorAll("#reportListWrap .nav-item").forEach(b=>{
+    b.classList.toggle("active", b.dataset.id===state.reports.active);
+    b.style.color = b.dataset.id===state.reports.active ? "#fff" : "#334155";
+  });
+
+  const def = getReportDef(state.reports.active);
+  const allRows = def.rows();
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const hasProjectCol = allRows.length>0 && "project" in allRows[0];
+  const filteredRows = (hasProjectCol && state.reports.project!=="All")
+    ? allRows.filter(r=> r.project===state.reports.project)
+    : allRows;
+
+  const body = document.getElementById("reportBody");
+  body.innerHTML = `
+    <div class="card" style="padding:16px">
+      <div class="flex-between" style="align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div>
+          <h3 class="section-title" style="margin:0">${def.title}</h3>
+          <p class="tiny muted" style="margin:4px 0 0">${def.desc}</p>
+        </div>
+        <div class="flex gap-2" style="flex-wrap:wrap">
+          ${hasProjectCol ? `<select id="reportProjectFilter"><option>All</option>${projectNames.map(p=>`<option ${p===state.reports.project?"selected":""}>${p}</option>`).join("")}</select>` : ""}
+          <select id="reportFY"><option>FY 2025-26</option><option>FY 2024-25</option></select>
+          <button class="btn-secondary" id="reportPdfBtn"><i data-lucide="file-down" style="width:14px;height:14px"></i> PDF</button>
+          <button class="btn-secondary" id="reportExcelBtn"><i data-lucide="download" style="width:14px;height:14px"></i> Excel</button>
+          <button class="btn-secondary" id="reportPrintBtn"><i data-lucide="printer" style="width:14px;height:14px"></i> Print</button>
+        </div>
+      </div>
+      <p class="tiny muted mt-3" id="reportRowCount"></p>
+      <div style="overflow-x:auto" class="mt-2">
+        <table id="reportTable">
+          <thead><tr>${def.columns.map(([,label])=>`<th>${label}</th>`).join("")}</tr></thead>
+          <tbody id="reportTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  if (hasProjectCol){
+    document.getElementById("reportProjectFilter").addEventListener("change", (e)=>{ state.reports.project = e.target.value; renderReportBody(); });
+  }
+  document.getElementById("reportPdfBtn").addEventListener("click", ()=> showToast(`${def.title} exported as PDF`));
+  document.getElementById("reportExcelBtn").addEventListener("click", ()=> showToast(`${def.title} exported as Excel`));
+  document.getElementById("reportPrintBtn").addEventListener("click", ()=> window.print());
+
+  document.getElementById("reportRowCount").textContent = `${filteredRows.length} records`;
+  const tbody = document.getElementById("reportTbody");
+  tbody.innerHTML = "";
+  if (filteredRows.length===0){
+    tbody.innerHTML = `<tr><td colspan="${def.columns.length}" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No records for this filter.</td></tr>`;
+  }
+  filteredRows.forEach(row=>{
+    const tds = def.columns.map(([key,,isCurrency])=> `<td>${reportFmtCell(row[key], isCurrency)}</td>`).join("");
+    tbody.insertAdjacentHTML("beforeend", `<tr>${tds}</tr>`);
+  });
+  icons();
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -2687,6 +2886,7 @@ function renderAll(){
   else if (state.active === "Billing & Accounts") renderBillingModule();
   else if (state.active === "Clients & Vendors") renderPartiesModule();
   else if (state.active === "Site Management") renderSiteModule();
+  else if (state.active === "Reports & Analytics") renderReportsModule();
   else renderPlaceholder(state.active);
   icons();
 }
