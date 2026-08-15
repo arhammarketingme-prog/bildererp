@@ -201,12 +201,45 @@ let ATTENDANCE = [
   { id:"ATT-007", date:"2026-08-12", contractor:"Shivaji Labour Suppliers", project:"Green Park Residency", present:29, absent:3, otHours:18 },
 ];
 
+/* ---------------------------- Billing & Accounts data ---------------------------- */
+const INV_STATUS_META = {
+  "Paid": {fg:"#16A34A", bg:"#DCFCE7"},
+  "Outstanding": {fg:"#2563EB", bg:"#DBEAFE"},
+  "Overdue": {fg:"#DC2626", bg:"#FEE2E2"},
+};
+
+function invNet(inv){
+  const gstAmt = inv.basic * (inv.gst/100);
+  const tdsAmt = inv.basic * (inv.tds/100);
+  const retentionAmt = inv.basic * (inv.retention/100);
+  return inv.basic + gstAmt - tdsAmt - retentionAmt;
+}
+
+let INVOICES = [
+  { id:"INV-2001", raBill:"RA-14", client:"Kohinoor Group", project:"Green Park Residency", basic:8500000, gst:18, tds:1, retention:5, dueDate:"2026-08-10", status:"Overdue", paid:0 },
+  { id:"INV-2002", raBill:"RA-11", client:"Lodha Developers", project:"Sunrise Apartments", basic:6200000, gst:18, tds:1, retention:5, dueDate:"2026-08-28", status:"Outstanding", paid:0 },
+  { id:"INV-2003", raBill:"RA-08", client:"Raheja Estates", project:"Blue Ridge Tower", basic:4100000, gst:18, tds:1, retention:5, dueDate:"2026-07-30", status:"Paid", paid:0 },
+  { id:"INV-2004", raBill:"RA-09", client:"Silver Homes", project:"Silver County", basic:2950000, gst:18, tds:2, retention:5, dueDate:"2026-08-20", status:"Outstanding", paid:0 },
+  { id:"INV-2005", raBill:"RA-05", client:"Prestige Group", project:"Emerald Business Park", basic:5300000, gst:18, tds:1, retention:5, dueDate:"2026-08-05", status:"Overdue", paid:0 },
+  { id:"INV-2006", raBill:"RA-16", client:"DLF Ltd", project:"Metro Heights", basic:7800000, gst:18, tds:1, retention:5, dueDate:"2026-09-01", status:"Paid", paid:0 },
+  { id:"INV-2007", raBill:"RA-03", client:"Sobha Ltd", project:"Palm Grove Estate", basic:3400000, gst:18, tds:1, retention:0, dueDate:"2026-07-15", status:"Paid", paid:0 },
+];
+INVOICES.forEach(inv=>{ if (inv.status==="Paid") inv.paid = invNet(inv); });
+
+const PAYMENT_MODES = ["Bank Transfer", "Cheque", "UPI", "RTGS/NEFT"];
+let PAYMENTS = [
+  { id:"RCP-501", client:"Raheja Estates", invoice:"INV-2003", amount:4100000*1.18*0.94, mode:"RTGS/NEFT", date:"2026-08-01" },
+  { id:"RCP-502", client:"DLF Ltd", invoice:"INV-2006", amount:7800000*1.18*0.94, mode:"Bank Transfer", date:"2026-08-06" },
+  { id:"RCP-503", client:"Sobha Ltd", invoice:"INV-2007", amount:3400000*1.18*0.99, mode:"Cheque", date:"2026-07-20" },
+];
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
   boq: { query:"", project:"All", status:"All", page:1, pageSize:6 },
   purchase: { tab:"po", query:"", status:"All", page:1, pageSize:6 },
   labour: { tab:"attendance", query:"", page:1, pageSize:6 },
+  billing: { tab:"invoices", query:"", status:"All", page:1, pageSize:6 },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -1641,6 +1674,307 @@ function openContractorPaymentModal(contractor){
   openModalNode(node);
 }
 
+/* ---------------------------- Billing & Accounts module ---------------------------- */
+function invPillHTML(status){
+  const m = INV_STATUS_META[status] || INV_STATUS_META["Outstanding"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${status}</span>`;
+}
+function invBalance(inv){ return Math.max(0, invNet(inv) - inv.paid); }
+
+function getFilteredInvoices(){
+  const { query, status } = state.billing;
+  return INVOICES.filter(inv =>
+    (status==="All" || inv.status===status) &&
+    (inv.client.toLowerCase().includes(query.toLowerCase()) || inv.project.toLowerCase().includes(query.toLowerCase()) || inv.id.toLowerCase().includes(query.toLowerCase()))
+  );
+}
+function getFilteredPayments(){
+  const { query } = state.billing;
+  return [...PAYMENTS].filter(p => p.client.toLowerCase().includes(query.toLowerCase()) || p.invoice.toLowerCase().includes(query.toLowerCase()))
+    .sort((a,b)=> b.date.localeCompare(a.date));
+}
+
+function renderBillingModule(){
+  const main = document.getElementById("mainContent");
+  const totalInvoiced = INVOICES.reduce((s,i)=> s+invNet(i), 0);
+  const totalPaid = INVOICES.reduce((s,i)=> s+i.paid, 0);
+  const totalOutstanding = INVOICES.reduce((s,i)=> s+invBalance(i), 0);
+  const overdueCount = INVOICES.filter(i=>i.status==="Overdue").length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="billingSummary"></section>
+    <div class="flex gap-2" id="billingTabs">
+      <button class="btn-secondary" id="tabInvoices">Client Invoices</button>
+      <button class="btn-secondary" id="tabPayments">Payments Received</button>
+    </div>
+    <div id="billingTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("billingSummary");
+  [
+    { label:"Total Invoiced", value:fmtINR(totalInvoiced), icon:"file-text", tint:"blue" },
+    { label:"Collected", value:fmtINR(totalPaid), icon:"check-circle-2", tint:"green" },
+    { label:"Outstanding", value:fmtINR(totalOutstanding), icon:"clock", tint:"navy" },
+    { label:"Overdue Invoices", value:overdueCount, icon:"alert-circle", tint:"orange" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabInvoices").addEventListener("click", ()=>{ state.billing.tab="invoices"; state.billing.query=""; state.billing.status="All"; state.billing.page=1; renderBillingTab(); });
+  document.getElementById("tabPayments").addEventListener("click", ()=>{ state.billing.tab="payments"; state.billing.query=""; state.billing.page=1; renderBillingTab(); });
+
+  renderBillingTab();
+  icons();
+}
+
+function renderBillingTab(){
+  document.getElementById("tabInvoices").classList.toggle("btn-primary", state.billing.tab==="invoices");
+  document.getElementById("tabInvoices").classList.toggle("btn-secondary", state.billing.tab!=="invoices");
+  document.getElementById("tabPayments").classList.toggle("btn-primary", state.billing.tab==="payments");
+  document.getElementById("tabPayments").classList.toggle("btn-secondary", state.billing.tab!=="payments");
+  if (state.billing.tab === "invoices") renderInvoicesTab(); else renderPaymentsTab();
+  icons();
+}
+
+function renderInvoicesTab(){
+  const body = document.getElementById("billingTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="invSearch2" placeholder="Search by invoice, client, or project…" value="${state.billing.query}"/></div>
+      <select id="invStatusFilter"></select>
+      <button class="btn-primary" id="newInvoiceBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Invoice</button>
+    </div>
+    <p class="tiny muted mt-2" id="invResultCount2"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Invoice / RA Bill</th><th>Client / Project</th><th>Basic Amount</th><th>GST</th><th>TDS</th><th>Retention</th><th>Net Payable</th><th>Balance Due</th><th>Due Date</th><th>Status</th><th style="text-align:right">Actions</th>
+        </tr></thead>
+        <tbody id="invTbody2"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="invPagination2" style="display:none">
+      <p class="tiny muted" id="invPageInfo2"></p>
+      <div class="flex gap-2"><button class="pg-btn" id="invPrevPage2"><i data-lucide="chevron-left"></i></button><button class="pg-btn" id="invNextPage2"><i data-lucide="chevron-right"></i></button></div>
+    </div>
+  `;
+  const statusFilter = document.getElementById("invStatusFilter");
+  statusFilter.innerHTML = `<option>All</option>` + Object.keys(INV_STATUS_META).map(s=>`<option>${s}</option>`).join("");
+  statusFilter.value = state.billing.status;
+
+  document.getElementById("invSearch2").addEventListener("input", (e)=>{ state.billing.query=e.target.value; state.billing.page=1; renderInvoicesList(); });
+  statusFilter.addEventListener("change", (e)=>{ state.billing.status=e.target.value; state.billing.page=1; renderInvoicesList(); });
+  document.getElementById("newInvoiceBtn").addEventListener("click", ()=> openInvoiceFormModal(null));
+
+  renderInvoicesList();
+  icons();
+}
+
+function renderInvoicesList(){
+  const filtered = getFilteredInvoices();
+  const { pageSize } = state.billing;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.billing.page > totalPages) state.billing.page = totalPages;
+  const pageRows = filtered.slice((state.billing.page-1)*pageSize, state.billing.page*pageSize);
+
+  document.getElementById("invResultCount2").textContent = `${filtered.length} invoices found`;
+  const tbody = document.getElementById("invTbody2");
+  tbody.innerHTML = "";
+  if (pageRows.length===0){
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No invoices match your filters.</td></tr>`;
+  }
+  pageRows.forEach(inv=>{
+    const net = invNet(inv), bal = invBalance(inv);
+    tbody.appendChild(el(`<tr>
+      <td><p style="font-weight:600;margin:0;color:#1e293b">${inv.id}</p><p class="tiny muted" style="margin:0">${inv.raBill}</p></td>
+      <td><p style="font-weight:600;margin:0;font-size:12.5px">${inv.client}</p><p class="tiny muted" style="margin:0">${inv.project}</p></td>
+      <td>${fmtINR(inv.basic)}</td>
+      <td>${inv.gst}%</td>
+      <td>${inv.tds}%</td>
+      <td>${inv.retention}%</td>
+      <td style="font-weight:600">${fmtINR(net)}</td>
+      <td style="font-weight:600;color:${bal>0?'#DC2626':'#16A34A'}">${fmtINR(bal)}</td>
+      <td class="tiny">${inv.dueDate}</td>
+      <td>${invPillHTML(inv.status)}</td>
+      <td><div class="row-actions">
+        ${bal>0 ? `<button class="icon-action" data-id="${inv.id}" data-act="pay" title="Record Payment"><i data-lucide="credit-card" style="color:#2563EB"></i></button>` : ""}
+        <button class="icon-action edit" data-id="${inv.id}" data-act="edit"><i data-lucide="pencil"></i></button>
+        <button class="icon-action del" data-id="${inv.id}" data-act="del"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openInvoiceFormModal(INVOICES.find(i=>i.id===b.dataset.id))));
+  tbody.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    INVOICES = INVOICES.filter(i=>i.id!==b.dataset.id);
+    showToast(`${b.dataset.id} deleted`);
+    renderInvoicesList();
+  }));
+  tbody.querySelectorAll("[data-act='pay']").forEach(b=> b.addEventListener("click", ()=> openPaymentReceivedModal(INVOICES.find(i=>i.id===b.dataset.id))));
+
+  const pag = document.getElementById("invPagination2");
+  if (totalPages > 1){
+    pag.style.display = "flex";
+    document.getElementById("invPageInfo2").textContent = `Page ${state.billing.page} of ${totalPages}`;
+    const prev = document.getElementById("invPrevPage2"), next = document.getElementById("invNextPage2");
+    prev.disabled = state.billing.page===1; next.disabled = state.billing.page===totalPages;
+    prev.onclick = ()=>{ state.billing.page--; renderInvoicesList(); icons(); };
+    next.onclick = ()=>{ state.billing.page++; renderInvoicesList(); icons(); };
+  } else { pag.style.display = "none"; }
+  icons();
+}
+
+function openInvoiceFormModal(inv){
+  const isEdit = !!inv;
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const clientMap = { "Green Park Residency":"Kohinoor Group","Sunrise Apartments":"Lodha Developers","Blue Ridge Tower":"Raheja Estates","Silver County":"Silver Homes","Emerald Business Park":"Prestige Group","Metro Heights":"DLF Ltd","Palm Grove Estate":"Sobha Ltd","Riverfront Villas":"Godrej Properties" };
+  const f = inv || { raBill:"", client:"", project:projectNames[0]||"", basic:"", gst:18, tds:1, retention:5, dueDate:"", status:"Outstanding" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Invoice" : "New Invoice"}</h3><button class="icon-btn" id="closeIF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>RA Bill No.</label><input id="i_raBill" value="${f.raBill}"/></div>
+          <div class="field"><label>Project</label><select id="i_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select></div>
+          <div class="field col-span-2"><label>Client</label><input id="i_client" value="${f.client}"/></div>
+          <div class="field"><label>Basic Amount (₹)</label><input type="number" id="i_basic" value="${f.basic}"/></div>
+          <div class="field"><label>GST (%)</label><select id="i_gst">${GST_RATES.map(g=>`<option ${g===f.gst?"selected":""}>${g}</option>`).join("")}</select></div>
+          <div class="field"><label>TDS (%)</label><input type="number" id="i_tds" value="${f.tds}"/></div>
+          <div class="field"><label>Retention (%)</label><input type="number" id="i_retention" value="${f.retention}"/></div>
+          <div class="field"><label>Net Payable</label><input type="text" id="i_net" disabled style="background:#F8FAFC;color:#64748b"/></div>
+          <div class="field"><label>Due Date</label><input type="date" id="i_dueDate" value="${f.dueDate}"/></div>
+          <div class="field"><label>Status</label><select id="i_status">${Object.keys(INV_STATUS_META).map(s=>`<option ${s===f.status?"selected":""}>${s}</option>`).join("")}</select></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelIF">Cancel</button>
+          <button class="btn-primary" id="saveIF">${isEdit ? "Save Changes" : "Create Invoice"}</button>
+        </div>
+      </div>
+    </div>`);
+
+  const projSel = node.querySelector("#i_project"), clientI = node.querySelector("#i_client");
+  if (!isEdit) clientI.value = clientMap[projSel.value] || "";
+  projSel.addEventListener("change", ()=>{ if(!isEdit) clientI.value = clientMap[projSel.value] || ""; });
+
+  const basicI = node.querySelector("#i_basic"), gstI = node.querySelector("#i_gst"), tdsI = node.querySelector("#i_tds"), retI = node.querySelector("#i_retention"), netI = node.querySelector("#i_net");
+  const recalc = ()=>{
+    const basic = Number(basicI.value)||0, gst=Number(gstI.value)||0, tds=Number(tdsI.value)||0, ret=Number(retI.value)||0;
+    netI.value = fmtINR(basic + basic*(gst/100) - basic*(tds/100) - basic*(ret/100));
+  };
+  [basicI,gstI,tdsI,retI].forEach(i=> i.addEventListener("input", recalc));
+  gstI.addEventListener("change", recalc);
+  recalc();
+
+  node.querySelector("#closeIF").addEventListener("click", closeModal);
+  node.querySelector("#cancelIF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveIF").addEventListener("click", ()=>{
+    const payload = {
+      raBill: node.querySelector("#i_raBill").value.trim(),
+      client: clientI.value.trim() || "Unnamed Client",
+      project: projSel.value,
+      basic: Number(basicI.value) || 0,
+      gst: Number(gstI.value) || 0,
+      tds: Number(tdsI.value) || 0,
+      retention: Number(retI.value) || 0,
+      dueDate: node.querySelector("#i_dueDate").value,
+      status: node.querySelector("#i_status").value,
+    };
+    if (isEdit){
+      Object.assign(inv, payload);
+      if (payload.status==="Paid") inv.paid = invNet(inv);
+      showToast(`${inv.id} updated`);
+    } else {
+      const id = `INV-${2001 + INVOICES.length}`;
+      const newInv = { id, ...payload, paid: payload.status==="Paid" ? invNet(payload) : 0 };
+      INVOICES = [newInv, ...INVOICES];
+      showToast(`${id} created`);
+      state.billing.page = 1;
+    }
+    closeModal();
+    renderInvoicesList();
+  });
+  openModalNode(node);
+}
+
+function openPaymentReceivedModal(inv){
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Payment Received — ${inv.id}</h3><button class="icon-btn" id="closePR"><i data-lucide="x"></i></button></div>
+        <div class="modal-body">
+          <div class="field"><label>Client</label><input type="text" value="${inv.client}" disabled style="background:#F8FAFC;color:#64748b"/></div>
+          <div class="field"><label>Balance Due</label><input type="text" value="${fmtINR(invBalance(inv))}" disabled style="background:#F8FAFC;color:#64748b"/></div>
+          <div class="field"><label>Amount Received (₹)</label><input type="number" id="pr_amount" placeholder="Enter amount"/></div>
+          <div class="field"><label>Mode</label><select id="pr_mode">${PAYMENT_MODES.map(m=>`<option>${m}</option>`).join("")}</select></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelPR">Cancel</button>
+          <button class="btn-primary" id="savePR">Save Payment</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closePR").addEventListener("click", closeModal);
+  node.querySelector("#cancelPR").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#savePR").addEventListener("click", ()=>{
+    const amt = Number(node.querySelector("#pr_amount").value) || 0;
+    const mode = node.querySelector("#pr_mode").value;
+    inv.paid += amt;
+    if (invBalance(inv) <= 0) inv.status = "Paid";
+    PAYMENTS = [{ id:`RCP-${501+PAYMENTS.length}`, client:inv.client, invoice:inv.id, amount:amt, mode, date:"2026-08-15" }, ...PAYMENTS];
+    closeModal();
+    showToast(`Payment of ${fmtINR(amt)} recorded for ${inv.id}`);
+    renderInvoicesList();
+  });
+  openModalNode(node);
+}
+
+function renderPaymentsTab(){
+  const body = document.getElementById("billingTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="paySearch" placeholder="Search by client or invoice…" value="${state.billing.query}"/></div>
+    </div>
+    <p class="tiny muted mt-2" id="payResultCount"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Receipt No.</th><th>Client</th><th>Invoice Ref.</th><th>Amount</th><th>Mode</th><th>Date</th></tr></thead>
+        <tbody id="payTbody"></tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("paySearch").addEventListener("input", (e)=>{ state.billing.query=e.target.value; renderPaymentsList(); });
+  renderPaymentsList();
+  icons();
+}
+
+function renderPaymentsList(){
+  const filtered = getFilteredPayments();
+  document.getElementById("payResultCount").textContent = `${filtered.length} receipts found`;
+  const tbody = document.getElementById("payTbody");
+  tbody.innerHTML = "";
+  if (filtered.length===0){
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No payment receipts match your search.</td></tr>`;
+  }
+  filtered.forEach(p=>{
+    tbody.appendChild(el(`<tr>
+      <td style="font-weight:600">${p.id}</td>
+      <td>${p.client}</td>
+      <td>${p.invoice}</td>
+      <td style="font-weight:600;color:#16A34A">${fmtINR(p.amount)}</td>
+      <td>${p.mode}</td>
+      <td class="tiny">${p.date}</td>
+    </tr>`));
+  });
+  icons();
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -1665,6 +1999,7 @@ function renderAll(){
   else if (state.active === "BOQ & Estimation") renderBoqModule();
   else if (state.active === "Purchase & Material") renderPurchaseModule();
   else if (state.active === "Labour & Contractor") renderLabourModule();
+  else if (state.active === "Billing & Accounts") renderBillingModule();
   else renderPlaceholder(state.active);
   icons();
 }
