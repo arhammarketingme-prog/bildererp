@@ -129,10 +129,31 @@ let PROJECTS = [
   { id:"PRJ-008", name:"Palm Grove Estate", client:"Sobha Ltd", pm:"Sneha Kulkarni", location:"Aurangabad, MH", status:"Completed", start:"2022-09-01", end:"2024-06-15", contract:34200000, billed:34200000, completion:100 },
 ];
 
-/* ---------------------------- state ---------------------------- */
+/* ---------------------------- BOQ data ---------------------------- */
+const BOQ_STATUS_META = {
+  "Draft": {fg:"#64748B", bg:"#F1F5F9"},
+  "Under Approval": {fg:"#EA580C", bg:"#FFEDD5"},
+  "Approved": {fg:"#16A34A", bg:"#DCFCE7"},
+};
+const UNITS = ["Cum","Sqm","Rmt","Kg","Ton","Nos","Bag","Ltr"];
+
+let BOQS = [
+  { id:"BOQ-0001", project:"Green Park Residency", item:"Excavation for Foundation", description:"Earthwork excavation in ordinary soil up to 1.5m depth", unit:"Cum", qty:1250, rate:185, actual:238000, remarks:"Rocky patch found, minor overrun", status:"Approved" },
+  { id:"BOQ-0002", project:"Green Park Residency", item:"RCC M25 Footing", description:"Reinforced cement concrete M25 grade for isolated footings", unit:"Cum", qty:340, rate:8200, actual:2820000, remarks:"", status:"Approved" },
+  { id:"BOQ-0003", project:"Sunrise Apartments", item:"Brick Masonry 230mm", description:"Class-A brick masonry in CM 1:6 for external walls", unit:"Sqm", qty:2100, rate:850, actual:1750000, remarks:"", status:"Approved" },
+  { id:"BOQ-0004", project:"Sunrise Apartments", item:"Internal Plastering 12mm", description:"Cement plaster 1:4 on internal walls", unit:"Sqm", qty:4800, rate:145, actual:0, remarks:"Awaiting site readiness", status:"Under Approval" },
+  { id:"BOQ-0005", project:"Blue Ridge Tower", item:"Structural Steel Fabrication", description:"Fabrication and erection of structural steel members", unit:"Ton", qty:85, rate:92000, actual:8100000, remarks:"Rate escalation applied", status:"Approved" },
+  { id:"BOQ-0006", project:"Blue Ridge Tower", item:"Aluminium Window Frames", description:"Powder-coated aluminium window frames with glazing", unit:"Sqm", qty:620, rate:3400, actual:0, remarks:"", status:"Draft" },
+  { id:"BOQ-0007", project:"Silver County", item:"Vitrified Flooring 600x600", description:"Vitrified tile flooring including bedding and grouting", unit:"Sqm", qty:3100, rate:780, actual:2380000, remarks:"", status:"Approved" },
+  { id:"BOQ-0008", project:"Emerald Business Park", item:"Waterproofing Terrace", description:"APP membrane waterproofing on terrace slab", unit:"Sqm", qty:980, rate:410, actual:0, remarks:"Vendor quote pending", status:"Under Approval" },
+  { id:"BOQ-0009", project:"Metro Heights", item:"External Painting", description:"Exterior emulsion paint, two coats with primer", unit:"Sqm", qty:5200, rate:95, actual:520000, remarks:"", status:"Draft" },
+];
+
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
+  boq: { query:"", project:"All", status:"All", page:1, pageSize:6 },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -662,6 +683,258 @@ function openConfirmDelete(id){
   openModalNode(node);
 }
 
+/* ---------------------------- BOQ & Estimation module ---------------------------- */
+function boqPillHTML(status){
+  const m = BOQ_STATUS_META[status] || BOQ_STATUS_META["Draft"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${status}</span>`;
+}
+function boqEstAmount(b){ return b.qty * b.rate; }
+function boqVariance(b){ return (b.actual || 0) - boqEstAmount(b); }
+
+function getFilteredBoqs(){
+  const { query, project, status } = state.boq;
+  return BOQS.filter(b =>
+    (project==="All" || b.project===project) &&
+    (status==="All" || b.status===status) &&
+    (b.item.toLowerCase().includes(query.toLowerCase()) || b.id.toLowerCase().includes(query.toLowerCase()))
+  );
+}
+
+function renderBoqModule(){
+  const main = document.getElementById("mainContent");
+  const projectNames = [...new Set(BOQS.map(b=>b.project))];
+  const totalEst = BOQS.reduce((s,b)=> s + boqEstAmount(b), 0);
+  const totalActual = BOQS.reduce((s,b)=> s + (b.actual||0), 0);
+  const approvedCount = BOQS.filter(b=>b.status==="Approved").length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="boqSummary"></section>
+
+    <div class="toolbar">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="boqSearch" placeholder="Search by BOQ number or item…" value="${state.boq.query}"/></div>
+      <select id="boqProjectFilter"></select>
+      <select id="boqStatusFilter"></select>
+      <button class="btn-secondary" id="boqImportBtn"><i data-lucide="upload" style="width:14px;height:14px"></i> Import</button>
+      <button class="btn-secondary" id="boqExportBtn"><i data-lucide="download" style="width:14px;height:14px"></i> Export</button>
+      <button class="btn-primary" id="newBoqBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>Create BOQ</button>
+    </div>
+    <p class="tiny muted" id="boqResultCount"></p>
+
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>BOQ No.</th><th>Project / Item</th><th>Unit</th><th>Qty</th><th>Rate</th>
+          <th>Estimated</th><th>Actual</th><th>Variance</th><th>Status</th><th style="text-align:right">Actions</th>
+        </tr></thead>
+        <tbody id="boqTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="boqPagination" style="display:none">
+      <p class="tiny muted" id="boqPageInfo"></p>
+      <div class="flex gap-2">
+        <button class="pg-btn" id="boqPrevPage"><i data-lucide="chevron-left"></i></button>
+        <button class="pg-btn" id="boqNextPage"><i data-lucide="chevron-right"></i></button>
+      </div>
+    </div>
+  `;
+
+  // summary strip
+  const summaryWrap = document.getElementById("boqSummary");
+  [
+    { label:"Total BOQs", value:BOQS.length, icon:"calculator", tint:"blue" },
+    { label:"Approved", value:approvedCount, icon:"check-circle-2", tint:"green" },
+    { label:"Estimated Value", value:fmtINR(totalEst), icon:"file-text", tint:"navy" },
+    { label:"Variance (Actual - Est.)", value:fmtINR(totalActual-totalEst), icon:(totalActual-totalEst>=0?"trending-up":"trending-down"), tint:(totalActual-totalEst>=0?"orange":"green") },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="flex gap-2" style="align-items:center;margin-bottom:8px">
+          <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg}"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        </div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  const projectFilter = document.getElementById("boqProjectFilter");
+  projectFilter.innerHTML = `<option>All</option>` + projectNames.map(p=>`<option>${p}</option>`).join("");
+  projectFilter.value = state.boq.project;
+  const statusFilter = document.getElementById("boqStatusFilter");
+  statusFilter.innerHTML = `<option>All</option>` + Object.keys(BOQ_STATUS_META).map(s=>`<option>${s}</option>`).join("");
+  statusFilter.value = state.boq.status;
+
+  document.getElementById("boqSearch").addEventListener("input", (e)=>{ state.boq.query = e.target.value; state.boq.page=1; renderBoqList(); });
+  projectFilter.addEventListener("change", (e)=>{ state.boq.project = e.target.value; state.boq.page=1; renderBoqList(); });
+  statusFilter.addEventListener("change", (e)=>{ state.boq.status = e.target.value; state.boq.page=1; renderBoqList(); });
+  document.getElementById("boqImportBtn").addEventListener("click", ()=> showToast("Import BOQ — CSV upload coming soon"));
+  document.getElementById("boqExportBtn").addEventListener("click", ()=> showToast(`Exported ${getFilteredBoqs().length} BOQ line items`));
+  document.getElementById("newBoqBtn").addEventListener("click", ()=> openBoqFormModal(null));
+
+  renderBoqList();
+  icons();
+}
+
+function renderBoqList(){
+  const filtered = getFilteredBoqs();
+  const { pageSize } = state.boq;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.boq.page > totalPages) state.boq.page = totalPages;
+  const pageRows = filtered.slice((state.boq.page-1)*pageSize, state.boq.page*pageSize);
+
+  document.getElementById("boqResultCount").textContent = `${filtered.length} BOQ line items found`;
+
+  const tbody = document.getElementById("boqTbody");
+  tbody.innerHTML = "";
+  if (pageRows.length===0){
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No BOQ items match your filters.</td></tr>`;
+  }
+  pageRows.forEach(b=>{
+    const est = boqEstAmount(b);
+    const variance = boqVariance(b);
+    const varColor = variance > 0 ? "#DC2626" : (variance < 0 ? "#16A34A" : "#64748B");
+    const tr = el(`<tr>
+      <td style="font-weight:600;color:#1e293b">${b.id}</td>
+      <td><p style="font-weight:600;margin:0;font-size:12.5px">${b.item}</p><p style="font-size:11px;color:#64748b;margin:0">${b.project}</p></td>
+      <td>${b.unit}</td>
+      <td>${b.qty.toLocaleString("en-IN")}</td>
+      <td>₹${b.rate.toLocaleString("en-IN")}</td>
+      <td style="font-weight:600">${fmtINR(est)}</td>
+      <td>${b.actual ? fmtINR(b.actual) : '<span class="tiny muted">—</span>'}</td>
+      <td style="color:${varColor};font-weight:600">${b.actual ? (variance>0?"+":"") + fmtINR(variance) : '<span class="tiny muted" style="color:#94a3b8">—</span>'}</td>
+      <td>${boqPillHTML(b.status)}</td>
+      <td><div class="row-actions">
+        ${b.status!=="Approved" ? `<button class="icon-action" data-id="${b.id}" data-act="approve" title="Approve"><i data-lucide="check" style="color:#16A34A"></i></button>` : ""}
+        <button class="icon-action edit" data-id="${b.id}" data-act="edit"><i data-lucide="pencil"></i></button>
+        <button class="icon-action del" data-id="${b.id}" data-act="del"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`);
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll("[data-act='edit']").forEach(btn=> btn.addEventListener("click", ()=> openBoqFormModal(BOQS.find(b=>b.id===btn.dataset.id))));
+  tbody.querySelectorAll("[data-act='del']").forEach(btn=> btn.addEventListener("click", ()=> openBoqConfirmDelete(btn.dataset.id)));
+  tbody.querySelectorAll("[data-act='approve']").forEach(btn=> btn.addEventListener("click", ()=>{
+    const b = BOQS.find(x=>x.id===btn.dataset.id);
+    b.status = "Approved";
+    showToast(`${b.id} approved`);
+    renderBoqList();
+  }));
+
+  const pag = document.getElementById("boqPagination");
+  if (totalPages > 1){
+    pag.style.display = "flex";
+    document.getElementById("boqPageInfo").textContent = `Page ${state.boq.page} of ${totalPages}`;
+    const prev = document.getElementById("boqPrevPage"), next = document.getElementById("boqNextPage");
+    prev.disabled = state.boq.page===1; next.disabled = state.boq.page===totalPages;
+    prev.onclick = ()=>{ state.boq.page--; renderBoqList(); icons(); };
+    next.onclick = ()=>{ state.boq.page++; renderBoqList(); icons(); };
+  } else { pag.style.display = "none"; }
+
+  icons();
+}
+
+function openBoqFormModal(boq){
+  const isEdit = !!boq;
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const f = boq || { project:projectNames[0]||"", item:"", description:"", unit:"Cum", qty:"", rate:"", actual:"", remarks:"", status:"Draft" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit BOQ Item" : "Create BOQ Item"}</h3><button class="icon-btn" id="closeBF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>Project</label>
+            <select id="b_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select>
+          </div>
+          <div class="field"><label>Status</label>
+            <select id="b_status">${Object.keys(BOQ_STATUS_META).map(s=>`<option ${s===f.status?"selected":""}>${s}</option>`).join("")}</select>
+          </div>
+          <div class="field col-span-2"><label>Item</label><input id="b_item" value="${f.item}"/></div>
+          <div class="field col-span-2"><label>Description</label><input id="b_description" value="${f.description}"/></div>
+          <div class="field"><label>Unit</label>
+            <select id="b_unit">${UNITS.map(u=>`<option ${u===f.unit?"selected":""}>${u}</option>`).join("")}</select>
+          </div>
+          <div class="field"><label>Quantity</label><input type="number" id="b_qty" value="${f.qty}"/></div>
+          <div class="field"><label>Rate (₹)</label><input type="number" id="b_rate" value="${f.rate}"/></div>
+          <div class="field"><label>Estimated Amount</label><input type="text" id="b_est" value="${f.qty&&f.rate?fmtINR(f.qty*f.rate):"₹0"}" disabled style="background:#F8FAFC;color:#64748b"/></div>
+          <div class="field"><label>Actual Amount (₹)</label><input type="number" id="b_actual" value="${f.actual||""}"/></div>
+          <div class="field col-span-2"><label>Remarks</label><input id="b_remarks" value="${f.remarks}"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelBF">Cancel</button>
+          <button class="btn-primary" id="saveBF">${isEdit ? "Save Changes" : "Create BOQ"}</button>
+        </div>
+      </div>
+    </div>`);
+
+  const qtyInput = node.querySelector("#b_qty"), rateInput = node.querySelector("#b_rate"), estInput = node.querySelector("#b_est");
+  const recalc = ()=>{
+    const q = Number(qtyInput.value)||0, r = Number(rateInput.value)||0;
+    estInput.value = fmtINR(q*r);
+  };
+  qtyInput.addEventListener("input", recalc);
+  rateInput.addEventListener("input", recalc);
+
+  node.querySelector("#closeBF").addEventListener("click", closeModal);
+  node.querySelector("#cancelBF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveBF").addEventListener("click", ()=>{
+    const payload = {
+      project: node.querySelector("#b_project").value,
+      item: node.querySelector("#b_item").value.trim() || "Untitled Item",
+      description: node.querySelector("#b_description").value.trim(),
+      unit: node.querySelector("#b_unit").value,
+      qty: Number(node.querySelector("#b_qty").value) || 0,
+      rate: Number(node.querySelector("#b_rate").value) || 0,
+      actual: Number(node.querySelector("#b_actual").value) || 0,
+      remarks: node.querySelector("#b_remarks").value.trim(),
+      status: node.querySelector("#b_status").value,
+    };
+    if (isEdit){
+      Object.assign(boq, payload);
+      showToast(`${boq.id} updated`);
+    } else {
+      const id = `BOQ-${String(BOQS.length+1).padStart(4,"0")}`;
+      BOQS = [{ id, ...payload }, ...BOQS];
+      showToast(`${id} created`);
+      state.boq.page = 1;
+    }
+    closeModal();
+    renderBoqModule();
+  });
+  openModalNode(node);
+}
+
+function openBoqConfirmDelete(id){
+  const b = BOQS.find(x=>x.id===id);
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box" style="max-width:380px">
+        <div style="padding:20px 20px 0">
+          <div class="flex gap-2" style="align-items:center;margin-bottom:8px">
+            <div class="modal-icon" style="background:#FEE2E2;color:#DC2626"><i data-lucide="alert-circle"></i></div>
+            <h3 style="font-size:15px;margin:0">Delete this BOQ item?</h3>
+          </div>
+          <p class="small muted" style="margin:0 0 16px">This will permanently remove <span class="bold">${b?b.item:""}</span> (${id}) from the BOQ list.</p>
+        </div>
+        <div class="modal-foot" style="border-top:none">
+          <button class="btn-secondary" id="cancelBDel">Cancel</button>
+          <button class="btn-danger" id="confirmBDel">Delete</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#cancelBDel").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#confirmBDel").addEventListener("click", ()=>{
+    BOQS = BOQS.filter(x=>x.id!==id);
+    closeModal();
+    showToast(`${id} deleted`);
+    renderBoqModule();
+  });
+  openModalNode(node);
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -683,6 +956,7 @@ function renderAll(){
   renderNav();
   if (state.active === "Dashboard") renderDashboard();
   else if (state.active === "Projects") renderProjectsModule();
+  else if (state.active === "BOQ & Estimation") renderBoqModule();
   else renderPlaceholder(state.active);
   icons();
 }
