@@ -149,11 +149,41 @@ let BOQS = [
   { id:"BOQ-0009", project:"Metro Heights", item:"External Painting", description:"Exterior emulsion paint, two coats with primer", unit:"Sqm", qty:5200, rate:95, actual:520000, remarks:"", status:"Draft" },
 ];
 
+/* ---------------------------- Purchase & Material data ---------------------------- */
+const PO_STATUS_META = {
+  "Draft": {fg:"#64748B", bg:"#F1F5F9"},
+  "Open": {fg:"#2563EB", bg:"#DBEAFE"},
+  "Delivered": {fg:"#16A34A", bg:"#DCFCE7"},
+  "Cancelled": {fg:"#DC2626", bg:"#FEE2E2"},
+};
+
+let PURCHASE_ORDERS = [
+  { id:"PO-1001", vendor:"Ambuja Cement Dealers", project:"Green Park Residency", material:"OPC 53 Grade Cement", qty:800, unit:"Bag", rate:395, gst:18, delivery:"2026-08-25", status:"Open" },
+  { id:"PO-1002", vendor:"Tata Steel Distributors", project:"Blue Ridge Tower", material:"TMT Bars Fe500 12mm", qty:45, unit:"Ton", rate:58500, gst:18, delivery:"2026-08-20", status:"Open" },
+  { id:"PO-1003", vendor:"Ultratech Building Supplies", project:"Sunrise Apartments", material:"River Sand", qty:220, unit:"Cum", rate:1650, gst:5, delivery:"2026-08-18", status:"Delivered" },
+  { id:"PO-1004", vendor:"Jindal Aluminium Co.", project:"Blue Ridge Tower", material:"Aluminium Window Frames", qty:620, unit:"Sqm", rate:3350, gst:18, delivery:"2026-09-05", status:"Draft" },
+  { id:"PO-1005", vendor:"Asian Paints Trading", project:"Metro Heights", material:"Exterior Emulsion Paint", qty:180, unit:"Ltr", rate:410, gst:18, delivery:"2026-08-30", status:"Open" },
+  { id:"PO-1006", vendor:"Kajaria Tiles Depot", project:"Silver County", material:"Vitrified Tiles 600x600", qty:3100, unit:"Sqm", rate:775, gst:12, delivery:"2026-08-22", status:"Delivered" },
+  { id:"PO-1007", vendor:"Jaquar Sanitaryware", project:"Green Park Residency", material:"CP Fittings Set", qty:96, unit:"Nos", rate:4200, gst:18, delivery:"2026-09-10", status:"Cancelled" },
+  { id:"PO-1008", vendor:"Ambuja Cement Dealers", project:"Emerald Business Park", material:"PPC Cement", qty:1200, unit:"Bag", rate:378, gst:18, delivery:"2026-08-28", status:"Open" },
+];
+
+let INVENTORY = [
+  { material:"OPC 53 Grade Cement", unit:"Bag", opening:1400, received:800, consumed:1650, reorder:400 },
+  { material:"River Sand", unit:"Cum", opening:340, received:220, consumed:310, reorder:100 },
+  { material:"TMT Bars Fe500 12mm", unit:"Ton", opening:62, received:45, consumed:58, reorder:20 },
+  { material:"Aggregate 20mm", unit:"Cum", opening:280, received:150, consumed:260, reorder:80 },
+  { material:"Bricks (Class A)", unit:"Nos", opening:85000, received:40000, consumed:98000, reorder:15000 },
+  { material:"Vitrified Tiles 600x600", unit:"Sqm", opening:1800, received:3100, consumed:2400, reorder:500 },
+  { material:"Exterior Emulsion Paint", unit:"Ltr", opening:120, received:180, consumed:260, reorder:60 },
+  { material:"Aluminium Window Frames", unit:"Sqm", opening:0, received:0, consumed:0, reorder:50 },
+];
 
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
   boq: { query:"", project:"All", status:"All", page:1, pageSize:6 },
+  purchase: { tab:"po", query:"", status:"All", page:1, pageSize:6 },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -935,6 +965,324 @@ function openBoqConfirmDelete(id){
   openModalNode(node);
 }
 
+/* ---------------------------- Purchase & Material module ---------------------------- */
+function poPillHTML(status){
+  const m = PO_STATUS_META[status] || PO_STATUS_META["Draft"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${status}</span>`;
+}
+function poTotal(po){ const base = po.qty * po.rate; return base + base * (po.gst/100); }
+function invAvailable(i){ return i.opening + i.received - i.consumed; }
+function invLowStock(i){ return invAvailable(i) <= i.reorder; }
+
+function getFilteredPOs(){
+  const { query, status } = state.purchase;
+  return PURCHASE_ORDERS.filter(p =>
+    (status==="All" || p.status===status) &&
+    (p.material.toLowerCase().includes(query.toLowerCase()) || p.vendor.toLowerCase().includes(query.toLowerCase()) || p.id.toLowerCase().includes(query.toLowerCase()))
+  );
+}
+function getFilteredInventory(){
+  const { query } = state.purchase;
+  return INVENTORY.filter(i => i.material.toLowerCase().includes(query.toLowerCase()));
+}
+
+function renderPurchaseModule(){
+  const main = document.getElementById("mainContent");
+  const openPOs = PURCHASE_ORDERS.filter(p=>p.status==="Open").length;
+  const totalPOValue = PURCHASE_ORDERS.reduce((s,p)=> s + poTotal(p), 0);
+  const lowStockCount = INVENTORY.filter(invLowStock).length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="purchaseSummary"></section>
+
+    <div class="flex gap-2" id="purchaseTabs">
+      <button class="btn-secondary" data-tab="po" id="tabPO">Purchase Orders</button>
+      <button class="btn-secondary" data-tab="inventory" id="tabInventory">Inventory</button>
+    </div>
+
+    <div id="purchaseTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("purchaseSummary");
+  [
+    { label:"Total Purchase Orders", value:PURCHASE_ORDERS.length, icon:"shopping-cart", tint:"blue" },
+    { label:"Open POs", value:openPOs, icon:"clock", tint:"navy" },
+    { label:"Total PO Value", value:fmtINR(totalPOValue), icon:"indian-rupee", tint:"green" },
+    { label:"Low Stock Items", value:lowStockCount, icon:"package-x", tint:"orange" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabPO").addEventListener("click", ()=>{ state.purchase.tab="po"; state.purchase.query=""; state.purchase.status="All"; state.purchase.page=1; renderPurchaseTab(); });
+  document.getElementById("tabInventory").addEventListener("click", ()=>{ state.purchase.tab="inventory"; state.purchase.query=""; state.purchase.page=1; renderPurchaseTab(); });
+
+  renderPurchaseTab();
+  icons();
+}
+
+function renderPurchaseTab(){
+  document.getElementById("tabPO").classList.toggle("btn-primary", state.purchase.tab==="po");
+  document.getElementById("tabPO").classList.toggle("btn-secondary", state.purchase.tab!=="po");
+  document.getElementById("tabInventory").classList.toggle("btn-primary", state.purchase.tab==="inventory");
+  document.getElementById("tabInventory").classList.toggle("btn-secondary", state.purchase.tab!=="inventory");
+  if (state.purchase.tab === "po") renderPOTab(); else renderInventoryTab();
+  icons();
+}
+
+function renderPOTab(){
+  const body = document.getElementById("purchaseTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="poSearch" placeholder="Search by PO number, vendor, or material…" value="${state.purchase.query}"/></div>
+      <select id="poStatusFilter"></select>
+      <button class="btn-primary" id="newPOBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Purchase Order</button>
+    </div>
+    <p class="tiny muted mt-2" id="poResultCount"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>PO No.</th><th>Vendor / Material</th><th>Project</th><th>Qty</th><th>Rate</th><th>GST</th><th>Total</th><th>Delivery</th><th>Status</th><th style="text-align:right">Actions</th>
+        </tr></thead>
+        <tbody id="poTbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="poPagination" style="display:none">
+      <p class="tiny muted" id="poPageInfo"></p>
+      <div class="flex gap-2"><button class="pg-btn" id="poPrevPage"><i data-lucide="chevron-left"></i></button><button class="pg-btn" id="poNextPage"><i data-lucide="chevron-right"></i></button></div>
+    </div>
+  `;
+  const statusFilter = document.getElementById("poStatusFilter");
+  statusFilter.innerHTML = `<option>All</option>` + Object.keys(PO_STATUS_META).map(s=>`<option>${s}</option>`).join("");
+  statusFilter.value = state.purchase.status;
+
+  document.getElementById("poSearch").addEventListener("input", (e)=>{ state.purchase.query=e.target.value; state.purchase.page=1; renderPOList(); });
+  statusFilter.addEventListener("change", (e)=>{ state.purchase.status=e.target.value; state.purchase.page=1; renderPOList(); });
+  document.getElementById("newPOBtn").addEventListener("click", ()=> openPOFormModal(null));
+
+  renderPOList();
+  icons();
+}
+
+function renderPOList(){
+  const filtered = getFilteredPOs();
+  const { pageSize } = state.purchase;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.purchase.page > totalPages) state.purchase.page = totalPages;
+  const pageRows = filtered.slice((state.purchase.page-1)*pageSize, state.purchase.page*pageSize);
+
+  document.getElementById("poResultCount").textContent = `${filtered.length} purchase orders found`;
+  const tbody = document.getElementById("poTbody");
+  tbody.innerHTML = "";
+  if (pageRows.length===0){
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No purchase orders match your filters.</td></tr>`;
+  }
+  pageRows.forEach(p=>{
+    tbody.appendChild(el(`<tr>
+      <td style="font-weight:600;color:#1e293b">${p.id}</td>
+      <td><p style="font-weight:600;margin:0;font-size:12.5px">${p.material}</p><p style="font-size:11px;color:#64748b;margin:0">${p.vendor}</p></td>
+      <td>${p.project}</td>
+      <td>${p.qty.toLocaleString("en-IN")} ${p.unit}</td>
+      <td>₹${p.rate.toLocaleString("en-IN")}</td>
+      <td>${p.gst}%</td>
+      <td style="font-weight:600">${fmtINR(poTotal(p))}</td>
+      <td class="tiny">${p.delivery}</td>
+      <td>${poPillHTML(p.status)}</td>
+      <td><div class="row-actions">
+        <button class="icon-action edit" data-id="${p.id}" data-act="edit"><i data-lucide="pencil"></i></button>
+        <button class="icon-action del" data-id="${p.id}" data-act="del"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openPOFormModal(PURCHASE_ORDERS.find(p=>p.id===b.dataset.id))));
+  tbody.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=> openPOConfirmDelete(b.dataset.id)));
+
+  const pag = document.getElementById("poPagination");
+  if (totalPages > 1){
+    pag.style.display = "flex";
+    document.getElementById("poPageInfo").textContent = `Page ${state.purchase.page} of ${totalPages}`;
+    const prev = document.getElementById("poPrevPage"), next = document.getElementById("poNextPage");
+    prev.disabled = state.purchase.page===1; next.disabled = state.purchase.page===totalPages;
+    prev.onclick = ()=>{ state.purchase.page--; renderPOList(); icons(); };
+    next.onclick = ()=>{ state.purchase.page++; renderPOList(); icons(); };
+  } else { pag.style.display = "none"; }
+  icons();
+}
+
+function openPOFormModal(po){
+  const isEdit = !!po;
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const f = po || { vendor:"", project:projectNames[0]||"", material:"", qty:"", unit:"Bag", rate:"", gst:18, delivery:"", status:"Draft" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Purchase Order" : "New Purchase Order"}</h3><button class="icon-btn" id="closePOF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field"><label>Vendor</label><input id="po_vendor" value="${f.vendor}"/></div>
+          <div class="field"><label>Project</label><select id="po_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select></div>
+          <div class="field col-span-2"><label>Material</label><input id="po_material" value="${f.material}"/></div>
+          <div class="field"><label>Quantity</label><input type="number" id="po_qty" value="${f.qty}"/></div>
+          <div class="field"><label>Unit</label><select id="po_unit">${UNITS.map(u=>`<option ${u===f.unit?"selected":""}>${u}</option>`).join("")}</select></div>
+          <div class="field"><label>Rate (₹)</label><input type="number" id="po_rate" value="${f.rate}"/></div>
+          <div class="field"><label>GST (%)</label><select id="po_gst">${GST_RATES.map(g=>`<option ${g===f.gst?"selected":""}>${g}</option>`).join("")}</select></div>
+          <div class="field"><label>Total (incl. GST)</label><input type="text" id="po_total" value="${f.qty&&f.rate?fmtINR(f.qty*f.rate*(1+f.gst/100)):"₹0"}" disabled style="background:#F8FAFC;color:#64748b"/></div>
+          <div class="field"><label>Delivery Date</label><input type="date" id="po_delivery" value="${f.delivery}"/></div>
+          <div class="field"><label>Status</label><select id="po_status">${Object.keys(PO_STATUS_META).map(s=>`<option ${s===f.status?"selected":""}>${s}</option>`).join("")}</select></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelPOF">Cancel</button>
+          <button class="btn-primary" id="savePOF">${isEdit ? "Save Changes" : "Create Purchase Order"}</button>
+        </div>
+      </div>
+    </div>`);
+
+  const qtyI = node.querySelector("#po_qty"), rateI = node.querySelector("#po_rate"), gstI = node.querySelector("#po_gst"), totalI = node.querySelector("#po_total");
+  const recalc = ()=>{ const q=Number(qtyI.value)||0, r=Number(rateI.value)||0, g=Number(gstI.value)||0; totalI.value = fmtINR(q*r*(1+g/100)); };
+  qtyI.addEventListener("input", recalc); rateI.addEventListener("input", recalc); gstI.addEventListener("change", recalc);
+
+  node.querySelector("#closePOF").addEventListener("click", closeModal);
+  node.querySelector("#cancelPOF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#savePOF").addEventListener("click", ()=>{
+    const payload = {
+      vendor: node.querySelector("#po_vendor").value.trim() || "Unnamed Vendor",
+      project: node.querySelector("#po_project").value,
+      material: node.querySelector("#po_material").value.trim() || "Untitled Material",
+      qty: Number(node.querySelector("#po_qty").value) || 0,
+      unit: node.querySelector("#po_unit").value,
+      rate: Number(node.querySelector("#po_rate").value) || 0,
+      gst: Number(node.querySelector("#po_gst").value) || 0,
+      delivery: node.querySelector("#po_delivery").value,
+      status: node.querySelector("#po_status").value,
+    };
+    if (isEdit){
+      Object.assign(po, payload);
+      showToast(`${po.id} updated`);
+    } else {
+      const id = `PO-${1001 + PURCHASE_ORDERS.length}`;
+      PURCHASE_ORDERS = [{ id, ...payload }, ...PURCHASE_ORDERS];
+      showToast(`${id} created`);
+      state.purchase.page = 1;
+    }
+    closeModal();
+    renderPurchaseModule();
+  });
+  openModalNode(node);
+}
+
+function openPOConfirmDelete(id){
+  const p = PURCHASE_ORDERS.find(x=>x.id===id);
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box" style="max-width:380px">
+        <div style="padding:20px 20px 0">
+          <div class="flex gap-2" style="align-items:center;margin-bottom:8px">
+            <div class="modal-icon" style="background:#FEE2E2;color:#DC2626"><i data-lucide="alert-circle"></i></div>
+            <h3 style="font-size:15px;margin:0">Delete this purchase order?</h3>
+          </div>
+          <p class="small muted" style="margin:0 0 16px">This will permanently remove <span class="bold">${p?p.material:""}</span> (${id}) from the PO list.</p>
+        </div>
+        <div class="modal-foot" style="border-top:none">
+          <button class="btn-secondary" id="cancelPODel">Cancel</button>
+          <button class="btn-danger" id="confirmPODel">Delete</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#cancelPODel").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#confirmPODel").addEventListener("click", ()=>{
+    PURCHASE_ORDERS = PURCHASE_ORDERS.filter(x=>x.id!==id);
+    closeModal();
+    showToast(`${id} deleted`);
+    renderPurchaseModule();
+  });
+  openModalNode(node);
+}
+
+function renderInventoryTab(){
+  const body = document.getElementById("purchaseTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="invSearch" placeholder="Search material…" value="${state.purchase.query}"/></div>
+      <button class="btn-primary" id="newReceiptBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>Material Receipt</button>
+    </div>
+    <p class="tiny muted mt-2" id="invResultCount"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Material</th><th>Opening</th><th>Received</th><th>Consumed</th><th>Available</th><th>Reorder Level</th><th>Alert</th>
+        </tr></thead>
+        <tbody id="invTbody"></tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("invSearch").addEventListener("input", (e)=>{ state.purchase.query=e.target.value; renderInventoryList(); });
+  document.getElementById("newReceiptBtn").addEventListener("click", ()=> openMaterialReceiptModal());
+  renderInventoryList();
+  icons();
+}
+
+function renderInventoryList(){
+  const filtered = getFilteredInventory();
+  document.getElementById("invResultCount").textContent = `${filtered.length} materials tracked`;
+  const tbody = document.getElementById("invTbody");
+  tbody.innerHTML = "";
+  if (filtered.length===0){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No materials match your search.</td></tr>`;
+  }
+  filtered.forEach(i=>{
+    const avail = invAvailable(i);
+    const low = invLowStock(i);
+    tbody.appendChild(el(`<tr>
+      <td style="font-weight:600">${i.material}</td>
+      <td>${i.opening.toLocaleString("en-IN")} ${i.unit}</td>
+      <td>${i.received.toLocaleString("en-IN")} ${i.unit}</td>
+      <td>${i.consumed.toLocaleString("en-IN")} ${i.unit}</td>
+      <td style="font-weight:600;color:${low?'#DC2626':'#1e293b'}">${avail.toLocaleString("en-IN")} ${i.unit}</td>
+      <td class="tiny muted">${i.reorder.toLocaleString("en-IN")} ${i.unit}</td>
+      <td>${low ? `<span class="pill" style="color:#DC2626;background:#FEE2E2"><span class="dot-sm" style="background:#DC2626"></span>Low Stock</span>` : `<span class="pill" style="color:#16A34A;background:#DCFCE7"><span class="dot-sm" style="background:#16A34A"></span>OK</span>`}</td>
+    </tr>`));
+  });
+  icons();
+}
+
+function openMaterialReceiptModal(){
+  const materialNames = INVENTORY.map(i=>i.material);
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Material Receipt</h3><button class="icon-btn" id="closeMR"><i data-lucide="x"></i></button></div>
+        <div class="modal-body">
+          <div class="field"><label>Material</label><select id="mr_material">${materialNames.map(m=>`<option>${m}</option>`).join("")}</select></div>
+          <div class="field"><label>Received Quantity</label><input type="number" id="mr_qty" placeholder="Enter quantity"/></div>
+          <div class="field"><label>PO Number (optional)</label><input type="text" id="mr_po" placeholder="e.g. PO-1001"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelMR">Cancel</button>
+          <button class="btn-primary" id="saveMR">Save Receipt</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeMR").addEventListener("click", closeModal);
+  node.querySelector("#cancelMR").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveMR").addEventListener("click", ()=>{
+    const matName = node.querySelector("#mr_material").value;
+    const qty = Number(node.querySelector("#mr_qty").value) || 0;
+    const item = INVENTORY.find(i=>i.material===matName);
+    if (item && qty>0) item.received += qty;
+    closeModal();
+    showToast(`Material receipt saved — ${matName}`);
+    if (state.purchase.tab==="inventory") renderInventoryList();
+  });
+  openModalNode(node);
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -957,6 +1305,7 @@ function renderAll(){
   if (state.active === "Dashboard") renderDashboard();
   else if (state.active === "Projects") renderProjectsModule();
   else if (state.active === "BOQ & Estimation") renderBoqModule();
+  else if (state.active === "Purchase & Material") renderPurchaseModule();
   else renderPlaceholder(state.active);
   icons();
 }
