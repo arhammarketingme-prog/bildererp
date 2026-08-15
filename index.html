@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BuildPro ERP · Contractor Management Solution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<!-- Icons -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<!-- Charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- Supabase client (ready for backend wiring later — free tier) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR (desktop) ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">B</div>
+      <div class="brand-text">
+        <p class="brand-name">BuildPro ERP</p>
+        <p class="brand-sub">Contractor Management</p>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+    <div class="sidebar-footer">Build Better. Manage Smarter.</div>
+  </aside>
+
+  <!-- ============ MOBILE NAV OVERLAY ============ -->
+  <div class="mobile-nav-overlay" id="mobileNavOverlay">
+    <aside class="sidebar mobile-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">B</div>
+        <p class="brand-name">BuildPro ERP</p>
+        <button class="icon-btn light" id="closeMobileNav" style="margin-left:auto"><i data-lucide="x"></i></button>
+      </div>
+      <nav class="sidebar-nav" id="sidebarNavMobile"></nav>
+    </aside>
+  </div>
+
+  <!-- ============ MAIN COLUMN ============ -->
+  <div class="main-col">
+    <header class="topbar">
+      <button class="icon-btn hide-desktop" id="openMobileNav"><i data-lucide="menu"></i></button>
+      <div class="topbar-title">
+        <h1 id="pageTitle">Dashboard</h1>
+        <p>Welcome back, Admin 👋</p>
+      </div>
+
+      <div class="topbar-selectors hide-mobile">
+        <select id="projectSelect">
+          <option>All Projects</option>
+          <option>Green Park Residency</option>
+          <option>Sunrise Apartments</option>
+          <option>Blue Ridge Tower</option>
+        </select>
+        <select id="fySelect">
+          <option>FY 2025-26</option>
+          <option>FY 2024-25</option>
+        </select>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="topbar-search hide-mobile">
+        <i data-lucide="search"></i>
+        <input placeholder="Search projects, clients, invoices…" />
+      </div>
+
+      <button class="icon-btn" id="notifBtn"><i data-lucide="bell"></i><span class="dot"></span></button>
+      <button class="icon-btn hide-mobile"><i data-lucide="settings"></i></button>
+
+      <div class="topbar-profile">
+        <div class="avatar">AU</div>
+        <div class="hide-mobile profile-text">
+          <p class="profile-name">Admin User</p>
+          <p class="profile-role">Super Admin</p>
+        </div>
+        <i data-lucide="chevron-down" class="hide-mobile" style="width:14px;color:#94a3b8"></i>
+      </div>
+    </header>
+
+    <main id="mainContent"><!-- rendered by app.js --></main>
+  </div>
+</div>
+
+<!-- ============ MODAL ROOT ============ -->
+<div id="modalRoot"></div>
+<!-- ============ TOAST ============ -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
