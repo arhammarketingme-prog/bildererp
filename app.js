@@ -295,6 +295,26 @@ let ISSUES = [
   { id:"ISS-205", site:"Metro Heights", title:"Crane operator certification expired", category:"Compliance", severity:"High", status:"Resolved", reportedBy:"Vikram Patil", date:"2026-08-01" },
 ];
 
+/* ---------------------------- Documents data ---------------------------- */
+const DOC_CATEGORIES = ["Contracts", "Drawings", "Approvals", "Compliance", "Site Photos", "Invoices & Billing"];
+const DOC_TYPE_ICON = { pdf:"file-text", docx:"file-text", xlsx:"file-spreadsheet", dwg:"ruler", jpg:"image", png:"image" };
+const DOC_TYPE_TINT = { pdf:{fg:"#DC2626",bg:"#FEE2E2"}, docx:{fg:"#2563EB",bg:"#DBEAFE"}, xlsx:{fg:"#16A34A",bg:"#DCFCE7"}, dwg:{fg:"#EA580C",bg:"#FFEDD5"}, jpg:{fg:"#7C3AED",bg:"#EDE9FE"}, png:{fg:"#7C3AED",bg:"#EDE9FE"} };
+
+let DOCUMENTS = [
+  { id:"DOC-001", name:"Green Park Residency - Construction Agreement.pdf", project:"Green Park Residency", category:"Contracts", type:"pdf", size:"2.4 MB", uploadedBy:"Rohit Sharma", date:"2024-01-18" },
+  { id:"DOC-002", name:"GPR Structural Drawings - Rev 3.dwg", project:"Green Park Residency", category:"Drawings", type:"dwg", size:"18.6 MB", uploadedBy:"Rohit Sharma", date:"2024-03-02" },
+  { id:"DOC-003", name:"Environmental Clearance Certificate.pdf", project:"Green Park Residency", category:"Compliance", type:"pdf", size:"1.1 MB", uploadedBy:"Admin User", date:"2024-01-25" },
+  { id:"DOC-004", name:"Sunrise Apartments - Sale Agreement Template.docx", project:"Sunrise Apartments", category:"Contracts", type:"docx", size:"340 KB", uploadedBy:"Anita Deshmukh", date:"2023-08-10" },
+  { id:"DOC-005", name:"Site Progress - August Week 2.jpg", project:"Sunrise Apartments", category:"Site Photos", type:"jpg", size:"3.2 MB", uploadedBy:"Anita Deshmukh", date:"2026-08-13" },
+  { id:"DOC-006", name:"Blue Ridge Tower - Structural Steel BOQ.xlsx", project:"Blue Ridge Tower", category:"Approvals", type:"xlsx", size:"210 KB", uploadedBy:"Vikram Patil", date:"2024-04-15" },
+  { id:"DOC-007", name:"Fire NOC - Blue Ridge Tower.pdf", project:"Blue Ridge Tower", category:"Compliance", type:"pdf", size:"890 KB", uploadedBy:"Vikram Patil", date:"2024-05-01" },
+  { id:"DOC-008", name:"Silver County - Tile Layout Plan.dwg", project:"Silver County", category:"Drawings", type:"dwg", size:"9.4 MB", uploadedBy:"Rohit Sharma", date:"2024-06-20" },
+  { id:"DOC-009", name:"Emerald Business Park - RA Bill 05.pdf", project:"Emerald Business Park", category:"Invoices & Billing", type:"pdf", size:"640 KB", uploadedBy:"Sneha Kulkarni", date:"2026-08-05" },
+  { id:"DOC-010", name:"Metro Heights - Facade Elevation.png", project:"Metro Heights", category:"Drawings", type:"png", size:"4.8 MB", uploadedBy:"Vikram Patil", date:"2024-07-11" },
+  { id:"DOC-011", name:"Metro Heights - Client MoU.pdf", project:"Metro Heights", category:"Contracts", type:"pdf", size:"1.6 MB", uploadedBy:"Admin User", date:"2023-06-08" },
+  { id:"DOC-012", name:"Palm Grove Estate - Completion Certificate.pdf", project:"Palm Grove Estate", category:"Compliance", type:"pdf", size:"720 KB", uploadedBy:"Sneha Kulkarni", date:"2024-06-18" },
+];
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
@@ -305,6 +325,7 @@ const state = {
   parties: { tab:"clients", query:"" },
   site: { tab:"overview", query:"" },
   reports: { active:"cost", project:"All" },
+  docs: { query:"", project:"All", category:"All", page:1, pageSize:8 },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -2859,6 +2880,178 @@ function renderReportBody(){
   icons();
 }
 
+/* ---------------------------- Documents module ---------------------------- */
+function getFilteredDocuments(){
+  const { query, project, category } = state.docs;
+  return [...DOCUMENTS].filter(d =>
+    (project==="All" || d.project===project) &&
+    (category==="All" || d.category===category) &&
+    d.name.toLowerCase().includes(query.toLowerCase())
+  ).sort((a,b)=> b.date.localeCompare(a.date));
+}
+
+function renderDocumentsModule(){
+  const main = document.getElementById("mainContent");
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const totalSize = DOCUMENTS.length;
+  const categoryCount = new Set(DOCUMENTS.map(d=>d.category)).size;
+  const recentUploads = DOCUMENTS.filter(d=> d.date >= "2026-08-01").length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="docsSummary"></section>
+
+    <div class="toolbar">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="docSearch" placeholder="Search documents by name…" value="${state.docs.query}"/></div>
+      <select id="docProjectFilter"></select>
+      <select id="docCategoryFilter"></select>
+      <button class="btn-primary" id="uploadDocBtn"><i data-lucide="upload" style="width:15px;height:15px"></i>Upload Document</button>
+    </div>
+    <p class="tiny muted" id="docResultCount"></p>
+
+    <div class="grid grid-4" id="docCards" style="align-items:stretch"></div>
+
+    <div class="pagination" id="docPagination" style="display:none">
+      <p class="tiny muted" id="docPageInfo"></p>
+      <div class="flex gap-2"><button class="pg-btn" id="docPrevPage"><i data-lucide="chevron-left"></i></button><button class="pg-btn" id="docNextPage"><i data-lucide="chevron-right"></i></button></div>
+    </div>
+  `;
+
+  const summaryWrap = document.getElementById("docsSummary");
+  [
+    { label:"Total Documents", value:totalSize, icon:"file-text", tint:"blue" },
+    { label:"Categories", value:categoryCount, icon:"folder-kanban", tint:"navy" },
+    { label:"Uploaded This Month", value:recentUploads, icon:"upload", tint:"green" },
+    { label:"Linked Projects", value:projectNames.length, icon:"building-2", tint:"orange" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  const projFilter = document.getElementById("docProjectFilter");
+  projFilter.innerHTML = `<option>All</option>` + projectNames.map(p=>`<option>${p}</option>`).join("");
+  projFilter.value = state.docs.project;
+  const catFilter = document.getElementById("docCategoryFilter");
+  catFilter.innerHTML = `<option>All</option>` + DOC_CATEGORIES.map(c=>`<option>${c}</option>`).join("");
+  catFilter.value = state.docs.category;
+
+  document.getElementById("docSearch").addEventListener("input", (e)=>{ state.docs.query=e.target.value; state.docs.page=1; renderDocumentsList(); });
+  projFilter.addEventListener("change", (e)=>{ state.docs.project=e.target.value; state.docs.page=1; renderDocumentsList(); });
+  catFilter.addEventListener("change", (e)=>{ state.docs.category=e.target.value; state.docs.page=1; renderDocumentsList(); });
+  document.getElementById("uploadDocBtn").addEventListener("click", ()=> openDocUploadModal());
+
+  renderDocumentsList();
+  icons();
+}
+
+function renderDocumentsList(){
+  const filtered = getFilteredDocuments();
+  const { pageSize } = state.docs;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.docs.page > totalPages) state.docs.page = totalPages;
+  const pageRows = filtered.slice((state.docs.page-1)*pageSize, state.docs.page*pageSize);
+
+  document.getElementById("docResultCount").textContent = `${filtered.length} documents found`;
+  const wrap = document.getElementById("docCards");
+  wrap.innerHTML = "";
+  if (pageRows.length===0){
+    wrap.innerHTML = `<div class="card" style="padding:36px;text-align:center;color:#94a3b8;font-size:13px;grid-column:1/-1">No documents match your filters.</div>`;
+  }
+  pageRows.forEach(d=>{
+    const tint = DOC_TYPE_TINT[d.type] || DOC_TYPE_TINT.pdf;
+    const icon = DOC_TYPE_ICON[d.type] || "file-text";
+    wrap.appendChild(el(`
+      <div class="card" style="padding:14px;display:flex;flex-direction:column">
+        <div class="flex gap-2" style="align-items:flex-start;margin-bottom:10px">
+          <div class="kpi-icon" style="width:36px;height:36px;background:${tint.bg};color:${tint.fg};flex-shrink:0"><i data-lucide="${icon}" style="width:17px;height:17px"></i></div>
+          <div style="min-width:0">
+            <p style="font-size:12.5px;font-weight:600;margin:0;line-height:1.3;word-break:break-word">${d.name}</p>
+          </div>
+        </div>
+        <p class="tiny muted" style="margin:0 0 2px">${d.project}</p>
+        <span class="pill" style="color:#475569;background:#F1F5F9;align-self:flex-start;margin:4px 0 8px">${d.category}</span>
+        <div class="flex-between tiny muted" style="margin-top:auto;padding-top:8px;border-top:1px solid #F1F5F9">
+          <span>${d.size}</span><span>${d.date}</span>
+        </div>
+        <p class="tiny muted" style="margin:4px 0 8px">By ${d.uploadedBy}</p>
+        <div class="row-actions">
+          <button class="icon-action" data-act="download" data-id="${d.id}" title="Download"><i data-lucide="download"></i></button>
+          <button class="icon-action del" data-act="del" data-id="${d.id}" title="Delete"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`));
+  });
+  wrap.querySelectorAll("[data-act='download']").forEach(b=> b.addEventListener("click", ()=>{
+    const d = DOCUMENTS.find(x=>x.id===b.dataset.id);
+    showToast(`Downloading ${d.name}`);
+  }));
+  wrap.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    const d = DOCUMENTS.find(x=>x.id===b.dataset.id);
+    DOCUMENTS = DOCUMENTS.filter(x=>x.id!==b.dataset.id);
+    showToast(`${d.name} deleted`);
+    renderDocumentsList();
+  }));
+
+  const pag = document.getElementById("docPagination");
+  if (totalPages > 1){
+    pag.style.display = "flex";
+    document.getElementById("docPageInfo").textContent = `Page ${state.docs.page} of ${totalPages}`;
+    const prev = document.getElementById("docPrevPage"), next = document.getElementById("docNextPage");
+    prev.disabled = state.docs.page===1; next.disabled = state.docs.page===totalPages;
+    prev.onclick = ()=>{ state.docs.page--; renderDocumentsList(); icons(); };
+    next.onclick = ()=>{ state.docs.page++; renderDocumentsList(); icons(); };
+  } else { pag.style.display = "none"; }
+  icons();
+}
+
+function openDocUploadModal(){
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>Upload Document</h3><button class="icon-btn" id="closeDU"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field col-span-2"><label>File Name</label><input id="du_name" placeholder="e.g. Contract Agreement.pdf"/></div>
+          <div class="field"><label>Project</label><select id="du_project">${projectNames.map(p=>`<option>${p}</option>`).join("")}</select></div>
+          <div class="field"><label>Category</label><select id="du_category">${DOC_CATEGORIES.map(c=>`<option>${c}</option>`).join("")}</select></div>
+          <div class="field"><label>File Type</label><select id="du_type">${Object.keys(DOC_TYPE_ICON).map(t=>`<option>${t}</option>`).join("")}</select></div>
+          <div class="field"><label>Uploaded By</label><input id="du_by" value="Admin User"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelDU">Cancel</button>
+          <button class="btn-primary" id="saveDU">Upload</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeDU").addEventListener("click", closeModal);
+  node.querySelector("#cancelDU").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveDU").addEventListener("click", ()=>{
+    const type = node.querySelector("#du_type").value;
+    let name = node.querySelector("#du_name").value.trim() || `Untitled.${type}`;
+    if (!name.toLowerCase().endsWith("."+type)) name += "."+type;
+    const payload = {
+      name,
+      project: node.querySelector("#du_project").value,
+      category: node.querySelector("#du_category").value,
+      type,
+      size: (Math.random()*8+0.2).toFixed(1)+" MB",
+      uploadedBy: node.querySelector("#du_by").value.trim() || "Admin User",
+      date: "2026-08-15",
+    };
+    const id = `DOC-${String(DOCUMENTS.length+1).padStart(3,"0")}`;
+    DOCUMENTS = [{ id, ...payload }, ...DOCUMENTS];
+    closeModal();
+    showToast(`${payload.name} uploaded`);
+    state.docs.page = 1;
+    renderDocumentsList();
+  });
+  openModalNode(node);
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -2887,6 +3080,7 @@ function renderAll(){
   else if (state.active === "Clients & Vendors") renderPartiesModule();
   else if (state.active === "Site Management") renderSiteModule();
   else if (state.active === "Reports & Analytics") renderReportsModule();
+  else if (state.active === "Documents") renderDocumentsModule();
   else renderPlaceholder(state.active);
   icons();
 }
