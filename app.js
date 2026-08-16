@@ -4000,5 +4000,157 @@ document.getElementById("closeMobileNav").addEventListener("click", ()=> documen
 document.getElementById("mobileNavOverlay").addEventListener("click", (e)=>{ if(e.target.id==="mobileNavOverlay") e.currentTarget.classList.remove("open"); });
 document.getElementById("notifBtn").addEventListener("click", ()=> showToast("3 new notifications"));
 
+/* ---------------------------- Authentication ---------------------------- */
+let currentUser = null;
+
+function authShell(title, sub, bodyHTML, footerHTML){
+  return `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="brand-mark">B</div>
+          <div><p style="font-weight:700;font-size:15px;margin:0;color:#0B1D3A">BuildPro ERP</p><p class="tiny muted" style="margin:0">Contractor Management</p></div>
+        </div>
+        <p class="auth-title">${title}</p>
+        <p class="auth-sub">${sub}</p>
+        ${bodyHTML}
+        ${footerHTML || ""}
+      </div>
+    </div>`;
+}
+
+function renderLoginScreen(){
+  const root = document.getElementById("authRoot");
+  root.innerHTML = authShell(
+    "Welcome back",
+    "Log in to your BuildPro ERP account",
+    `
+    <div id="loginError"></div>
+    <div class="auth-field"><label>Email</label><input type="email" id="login_email" placeholder="you@company.com" value="admin@buildpro.in"/></div>
+    <div class="auth-field"><label>Password</label><input type="password" id="login_password" placeholder="Enter password" value="••••••••"/></div>
+    <button class="auth-btn" id="loginBtn">Log In</button>
+    <div class="auth-links">
+      <a id="goForgot">Forgot password?</a>
+      <a id="goRegister">Create account</a>
+    </div>`,
+    `<p class="auth-footer">Demo build — any email &amp; password logs you in.</p>`
+  );
+  document.getElementById("goForgot").addEventListener("click", renderForgotScreen);
+  document.getElementById("goRegister").addEventListener("click", renderRegisterScreen);
+  document.getElementById("loginBtn").addEventListener("click", ()=>{
+    const email = document.getElementById("login_email").value.trim();
+    const pass = document.getElementById("login_password").value.trim();
+    if (!email || !pass){
+      document.getElementById("loginError").innerHTML = `<div class="auth-error">Please enter both email and password.</div>`;
+      return;
+    }
+    const matched = SYSTEM_USERS.find(u=> u.email.toLowerCase()===email.toLowerCase());
+    currentUser = matched || { name:"Admin User", email, role:"Super Admin", status:"Active" };
+    enterApp();
+  });
+}
+
+function renderRegisterScreen(){
+  const root = document.getElementById("authRoot");
+  root.innerHTML = authShell(
+    "Create your account",
+    "Register a new BuildPro ERP user",
+    `
+    <div id="regError"></div>
+    <div class="auth-field"><label>Full Name</label><input type="text" id="reg_name" placeholder="Your name"/></div>
+    <div class="auth-field"><label>Email</label><input type="email" id="reg_email" placeholder="you@company.com"/></div>
+    <div class="auth-field"><label>Password</label><input type="password" id="reg_password" placeholder="Create a password"/></div>
+    <div class="auth-field"><label>Role</label><select id="reg_role">${ALL_ROLES.map(r=>`<option>${r}</option>`).join("")}</select></div>
+    <button class="auth-btn" id="registerBtn">Create Account</button>`,
+    `<p class="auth-footer">Already have an account? <a id="goLogin">Log in</a></p>`
+  );
+  document.getElementById("goLogin").addEventListener("click", renderLoginScreen);
+  document.getElementById("registerBtn").addEventListener("click", ()=>{
+    const name = document.getElementById("reg_name").value.trim();
+    const email = document.getElementById("reg_email").value.trim();
+    const pass = document.getElementById("reg_password").value.trim();
+    const role = document.getElementById("reg_role").value;
+    if (!name || !email || !pass){
+      document.getElementById("regError").innerHTML = `<div class="auth-error">Please fill in all fields.</div>`;
+      return;
+    }
+    const id = `USR-${String(SYSTEM_USERS.length+1).padStart(2,"0")}`;
+    const newUser = { id, name, email, role, status:"Active" };
+    SYSTEM_USERS = [newUser, ...SYSTEM_USERS];
+    currentUser = newUser;
+    enterApp();
+  });
+}
+
+function renderForgotScreen(){
+  const root = document.getElementById("authRoot");
+  root.innerHTML = authShell(
+    "Forgot password",
+    "Enter your email and we'll send a reset link",
+    `
+    <div id="forgotMsg"></div>
+    <div class="auth-field"><label>Email</label><input type="email" id="forgot_email" placeholder="you@company.com"/></div>
+    <button class="auth-btn" id="forgotBtn">Send Reset Link</button>`,
+    `<p class="auth-footer"><a id="backToLogin1">← Back to log in</a></p>`
+  );
+  document.getElementById("backToLogin1").addEventListener("click", renderLoginScreen);
+  document.getElementById("forgotBtn").addEventListener("click", ()=>{
+    const email = document.getElementById("forgot_email").value.trim();
+    if (!email){
+      document.getElementById("forgotMsg").innerHTML = `<div class="auth-error">Please enter your email.</div>`;
+      return;
+    }
+    renderResetScreen(email);
+  });
+}
+
+function renderResetScreen(email){
+  const root = document.getElementById("authRoot");
+  root.innerHTML = authShell(
+    "Reset password",
+    `A reset code was sent to ${email || "your email"} (demo — just set a new password below)`,
+    `
+    <div id="resetMsg"></div>
+    <div class="auth-field"><label>New Password</label><input type="password" id="reset_pass1" placeholder="New password"/></div>
+    <div class="auth-field"><label>Confirm New Password</label><input type="password" id="reset_pass2" placeholder="Confirm password"/></div>
+    <button class="auth-btn" id="resetBtn">Reset Password</button>`,
+    `<p class="auth-footer"><a id="backToLogin2">← Back to log in</a></p>`
+  );
+  document.getElementById("backToLogin2").addEventListener("click", renderLoginScreen);
+  document.getElementById("resetBtn").addEventListener("click", ()=>{
+    const p1 = document.getElementById("reset_pass1").value;
+    const p2 = document.getElementById("reset_pass2").value;
+    if (!p1 || p1!==p2){
+      document.getElementById("resetMsg").innerHTML = `<div class="auth-error">Passwords are empty or do not match.</div>`;
+      return;
+    }
+    renderLoginScreen();
+    showToastPending = "Password reset successfully. Please log in.";
+  });
+}
+
+let showToastPending = null;
+
+function enterApp(){
+  document.getElementById("authRoot").innerHTML = "";
+  document.getElementById("appRoot").style.display = "flex";
+  if (currentUser){
+    const nameEl = document.querySelector(".profile-name");
+    const roleEl = document.querySelector(".profile-role");
+    if (nameEl) nameEl.textContent = currentUser.name;
+    if (roleEl) roleEl.textContent = currentUser.role;
+    document.querySelector(".avatar").textContent = currentUser.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  }
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) logoutBtn.onclick = ()=>{
+    document.getElementById("appRoot").style.display = "none";
+    currentUser = null;
+    renderLoginScreen();
+  };
+  renderAll();
+  if (showToastPending){ showToast(showToastPending); showToastPending = null; }
+  else showToast(`Welcome back, ${currentUser ? currentUser.name.split(" ")[0] : "Admin"}!`);
+}
+
 /* ---------------------------- init ---------------------------- */
-renderAll();
+renderLoginScreen();

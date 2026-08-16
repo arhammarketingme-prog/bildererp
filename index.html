@@ -16,7 +16,9 @@
 </head>
 <body>
 
-<div class="app">
+<div id="authRoot"></div>
+
+<div class="app" id="appRoot" style="display:none">
 
   <!-- ============ SIDEBAR (desktop) ============ -->
   <aside class="sidebar" id="sidebar">
@@ -83,6 +85,7 @@
         </div>
         <i data-lucide="chevron-down" class="hide-mobile" style="width:14px;color:#94a3b8"></i>
       </div>
+      <button class="icon-btn" id="logoutBtn" title="Log out"><i data-lucide="log-out"></i></button>
     </header>
 
     <main id="mainContent"><!-- rendered by app.js --></main>
