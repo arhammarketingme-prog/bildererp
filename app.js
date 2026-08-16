@@ -315,6 +315,35 @@ let DOCUMENTS = [
   { id:"DOC-012", name:"Palm Grove Estate - Completion Certificate.pdf", project:"Palm Grove Estate", category:"Compliance", type:"pdf", size:"720 KB", uploadedBy:"Sneha Kulkarni", date:"2024-06-18" },
 ];
 
+/* ---------------------------- HR & Payroll data ---------------------------- */
+const ROLES = ["Super Admin", "Admin", "Project Manager", "Site Engineer", "Accountant", "Purchase Manager", "HR", "Supervisor"];
+const DEPARTMENTS = ["Management", "Site Operations", "Finance", "Procurement", "Human Resources"];
+const PAYROLL_STATUS_META = {
+  "Paid": {fg:"#16A34A", bg:"#DCFCE7"},
+  "Pending": {fg:"#EA580C", bg:"#FFEDD5"},
+};
+
+let EMPLOYEES = [
+  { id:"EMP-001", name:"Rohit Sharma", role:"Project Manager", department:"Site Operations", project:"Green Park Residency", phone:"+91 98110 22334", email:"rohit.sharma@buildpro.in", joinDate:"2021-04-12", salary:95000 },
+  { id:"EMP-002", name:"Anita Deshmukh", role:"Project Manager", department:"Site Operations", project:"Sunrise Apartments", phone:"+91 98220 33445", email:"anita.deshmukh@buildpro.in", joinDate:"2020-11-03", salary:98000 },
+  { id:"EMP-003", name:"Vikram Patil", role:"Site Engineer", department:"Site Operations", project:"Blue Ridge Tower", phone:"+91 98330 44556", email:"vikram.patil@buildpro.in", joinDate:"2022-02-18", salary:68000 },
+  { id:"EMP-004", name:"Sneha Kulkarni", role:"Site Engineer", department:"Site Operations", project:"Emerald Business Park", phone:"+91 98440 55667", email:"sneha.kulkarni@buildpro.in", joinDate:"2022-07-25", salary:70000 },
+  { id:"EMP-005", name:"Admin User", role:"Super Admin", department:"Management", project:"—", phone:"+91 98550 66778", email:"admin@buildpro.in", joinDate:"2019-01-15", salary:150000 },
+  { id:"EMP-006", name:"Priya Nair", role:"Accountant", department:"Finance", project:"—", phone:"+91 98660 77889", email:"priya.nair@buildpro.in", joinDate:"2021-09-08", salary:52000 },
+  { id:"EMP-007", name:"Rahul Joshi", role:"Purchase Manager", department:"Procurement", project:"—", phone:"+91 98770 88990", email:"rahul.joshi@buildpro.in", joinDate:"2022-01-10", salary:58000 },
+  { id:"EMP-008", name:"Kavita Rane", role:"HR", department:"Human Resources", project:"—", phone:"+91 98880 99001", email:"kavita.rane@buildpro.in", joinDate:"2023-03-05", salary:48000 },
+  { id:"EMP-009", name:"Suresh Pawar", role:"Supervisor", department:"Site Operations", project:"Silver County", phone:"+91 98990 00112", email:"suresh.pawar@buildpro.in", joinDate:"2023-06-14", salary:38000 },
+];
+
+function payrollDeductions(basic){ return { pf: basic*0.12, tds: basic>75000 ? basic*0.05 : 0 }; }
+function payrollNet(basic, allowances){ const d = payrollDeductions(basic); return basic + allowances - d.pf - d.tds; }
+
+let PAYROLL = EMPLOYEES.map((e,i)=>({
+  id:`PAY-${String(i+1).padStart(3,"0")}`, empId:e.id, name:e.name, role:e.role,
+  month:"August 2026", basic:e.salary, allowances:Math.round(e.salary*0.15),
+  status: i%4===0 ? "Pending" : "Paid",
+}));
+
 const state = {
   active: "Dashboard",
   proj: { view:"table", query:"", status:"All", sort:"name", page:1, pageSize:5 },
@@ -326,6 +355,7 @@ const state = {
   site: { tab:"overview", query:"" },
   reports: { active:"cost", project:"All" },
   docs: { query:"", project:"All", category:"All", page:1, pageSize:8 },
+  hr: { tab:"employees", query:"" },
 };
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -3052,6 +3082,233 @@ function openDocUploadModal(){
   openModalNode(node);
 }
 
+/* ---------------------------- HR & Payroll module ---------------------------- */
+function payrollPillHTML(status){
+  const m = PAYROLL_STATUS_META[status] || PAYROLL_STATUS_META["Pending"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${status}</span>`;
+}
+function getFilteredEmployees(){
+  const { query } = state.hr;
+  return EMPLOYEES.filter(e => e.name.toLowerCase().includes(query.toLowerCase()) || e.role.toLowerCase().includes(query.toLowerCase()));
+}
+function getFilteredPayroll(){
+  const { query } = state.hr;
+  return PAYROLL.filter(p => p.name.toLowerCase().includes(query.toLowerCase()) || p.role.toLowerCase().includes(query.toLowerCase()));
+}
+
+function renderHRModule(){
+  const main = document.getElementById("mainContent");
+  const totalPayroll = PAYROLL.reduce((s,p)=> s + payrollNet(p.basic,p.allowances), 0);
+  const pendingCount = PAYROLL.filter(p=>p.status==="Pending").length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="hrSummary"></section>
+    <div class="flex gap-2" id="hrTabs">
+      <button class="btn-secondary" id="tabEmployees">Employees</button>
+      <button class="btn-secondary" id="tabPayroll">Payroll</button>
+    </div>
+    <div id="hrTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("hrSummary");
+  [
+    { label:"Total Employees", value:EMPLOYEES.length, icon:"user-cog", tint:"blue" },
+    { label:"Roles", value:new Set(EMPLOYEES.map(e=>e.role)).size, icon:"users", tint:"navy" },
+    { label:"Monthly Payroll", value:fmtINR(totalPayroll), icon:"indian-rupee", tint:"green" },
+    { label:"Pending Payouts", value:pendingCount, icon:"clock", tint:"orange" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabEmployees").addEventListener("click", ()=>{ state.hr.tab="employees"; state.hr.query=""; renderHRTab(); });
+  document.getElementById("tabPayroll").addEventListener("click", ()=>{ state.hr.tab="payroll"; state.hr.query=""; renderHRTab(); });
+
+  renderHRTab();
+  icons();
+}
+
+function renderHRTab(){
+  document.getElementById("tabEmployees").classList.toggle("btn-primary", state.hr.tab==="employees");
+  document.getElementById("tabEmployees").classList.toggle("btn-secondary", state.hr.tab!=="employees");
+  document.getElementById("tabPayroll").classList.toggle("btn-primary", state.hr.tab==="payroll");
+  document.getElementById("tabPayroll").classList.toggle("btn-secondary", state.hr.tab!=="payroll");
+  if (state.hr.tab === "payroll") renderPayrollTab(); else renderEmployeesTab();
+  icons();
+}
+
+function renderEmployeesTab(){
+  const body = document.getElementById("hrTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="empSearch" placeholder="Search by name or role…" value="${state.hr.query}"/></div>
+      <button class="btn-primary" id="newEmployeeBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Employee</button>
+    </div>
+    <p class="tiny muted mt-2" id="empResultCount"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Employee</th><th>Role</th><th>Department</th><th>Project</th><th>Contact</th><th>Monthly Salary</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody id="empTbody"></tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("empSearch").addEventListener("input", (e)=>{ state.hr.query=e.target.value; renderEmployeesList(); });
+  document.getElementById("newEmployeeBtn").addEventListener("click", ()=> openEmployeeFormModal(null));
+  renderEmployeesList();
+  icons();
+}
+
+function renderEmployeesList(){
+  const filtered = getFilteredEmployees();
+  document.getElementById("empResultCount").textContent = `${filtered.length} employees found`;
+  const tbody = document.getElementById("empTbody");
+  tbody.innerHTML = "";
+  if (filtered.length===0){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No employees match your search.</td></tr>`;
+  }
+  filtered.forEach(e=>{
+    tbody.appendChild(el(`<tr>
+      <td><p style="font-weight:600;margin:0">${e.name}</p><p class="tiny muted" style="margin:0">${e.id} · Joined ${e.joinDate}</p></td>
+      <td><span class="pill" style="color:#2563EB;background:#DBEAFE">${e.role}</span></td>
+      <td>${e.department}</td>
+      <td class="tiny">${e.project}</td>
+      <td class="tiny">${e.phone}<br/><span class="muted">${e.email}</span></td>
+      <td style="font-weight:600">${fmtINR(e.salary)}</td>
+      <td><div class="row-actions">
+        <button class="icon-action edit" data-id="${e.id}" data-act="edit"><i data-lucide="pencil"></i></button>
+        <button class="icon-action del" data-id="${e.id}" data-act="del"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openEmployeeFormModal(EMPLOYEES.find(e=>e.id===b.dataset.id))));
+  tbody.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    EMPLOYEES = EMPLOYEES.filter(e=>e.id!==b.dataset.id);
+    PAYROLL = PAYROLL.filter(p=>p.empId!==b.dataset.id);
+    showToast("Employee removed");
+    renderEmployeesList();
+  }));
+  icons();
+}
+
+function openEmployeeFormModal(emp){
+  const isEdit = !!emp;
+  const projectNames = ["—", ...new Set(PROJECTS.map(p=>p.name))];
+  const f = emp || { name:"", role:ROLES[0], department:DEPARTMENTS[0], project:"—", phone:"", email:"", joinDate:"", salary:"" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Employee" : "New Employee"}</h3><button class="icon-btn" id="closeEF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field col-span-2"><label>Full Name</label><input id="e_name" value="${f.name}"/></div>
+          <div class="field"><label>Role</label><select id="e_role">${ROLES.map(r=>`<option ${r===f.role?"selected":""}>${r}</option>`).join("")}</select></div>
+          <div class="field"><label>Department</label><select id="e_department">${DEPARTMENTS.map(d=>`<option ${d===f.department?"selected":""}>${d}</option>`).join("")}</select></div>
+          <div class="field"><label>Assigned Project</label><select id="e_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select></div>
+          <div class="field"><label>Monthly Salary (₹)</label><input type="number" id="e_salary" value="${f.salary}"/></div>
+          <div class="field"><label>Phone</label><input id="e_phone" value="${f.phone}"/></div>
+          <div class="field"><label>Email</label><input id="e_email" value="${f.email}"/></div>
+          <div class="field col-span-2"><label>Join Date</label><input type="date" id="e_joinDate" value="${f.joinDate}"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelEF">Cancel</button>
+          <button class="btn-primary" id="saveEF">${isEdit ? "Save Changes" : "Add Employee"}</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeEF").addEventListener("click", closeModal);
+  node.querySelector("#cancelEF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveEF").addEventListener("click", ()=>{
+    const payload = {
+      name: node.querySelector("#e_name").value.trim() || "Unnamed Employee",
+      role: node.querySelector("#e_role").value,
+      department: node.querySelector("#e_department").value,
+      project: node.querySelector("#e_project").value,
+      salary: Number(node.querySelector("#e_salary").value) || 0,
+      phone: node.querySelector("#e_phone").value.trim(),
+      email: node.querySelector("#e_email").value.trim(),
+      joinDate: node.querySelector("#e_joinDate").value,
+    };
+    if (isEdit){
+      Object.assign(emp, payload);
+      showToast(`${emp.name} updated`);
+    } else {
+      const id = `EMP-${String(EMPLOYEES.length+1).padStart(3,"0")}`;
+      EMPLOYEES = [{ id, ...payload }, ...EMPLOYEES];
+      PAYROLL = [{ id:`PAY-${String(PAYROLL.length+1).padStart(3,"0")}`, empId:id, name:payload.name, role:payload.role, month:"August 2026", basic:payload.salary, allowances:Math.round(payload.salary*0.15), status:"Pending" }, ...PAYROLL];
+      showToast(`${payload.name} added`);
+    }
+    closeModal();
+    renderEmployeesList();
+  });
+  openModalNode(node);
+}
+
+function renderPayrollTab(){
+  const body = document.getElementById("hrTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="paySearch2" placeholder="Search by name or role…" value="${state.hr.query}"/></div>
+      <button class="btn-primary" id="runPayrollBtn"><i data-lucide="play" style="width:15px;height:15px"></i>Run Payroll</button>
+    </div>
+    <p class="tiny muted mt-2" id="payResultCount2"></p>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Employee</th><th>Role</th><th>Month</th><th>Basic</th><th>Allowances</th><th>PF (12%)</th><th>TDS</th><th>Net Pay</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody id="payTbody2"></tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("paySearch2").addEventListener("input", (e)=>{ state.hr.query=e.target.value; renderPayrollList(); });
+  document.getElementById("runPayrollBtn").addEventListener("click", ()=>{
+    let count = 0;
+    PAYROLL.forEach(p=>{ if (p.status==="Pending"){ p.status="Paid"; count++; } });
+    showToast(count>0 ? `Payroll processed for ${count} employees` : "All payroll already processed");
+    renderPayrollList();
+  });
+  renderPayrollList();
+  icons();
+}
+
+function renderPayrollList(){
+  const filtered = getFilteredPayroll();
+  document.getElementById("payResultCount2").textContent = `${filtered.length} payroll records found`;
+  const tbody = document.getElementById("payTbody2");
+  tbody.innerHTML = "";
+  if (filtered.length===0){
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:36px;color:#94a3b8;font-size:13px">No payroll records match your search.</td></tr>`;
+  }
+  filtered.forEach(p=>{
+    const d = payrollDeductions(p.basic);
+    const net = payrollNet(p.basic, p.allowances);
+    tbody.appendChild(el(`<tr>
+      <td style="font-weight:600">${p.name}</td>
+      <td class="tiny">${p.role}</td>
+      <td class="tiny">${p.month}</td>
+      <td>${fmtINR(p.basic)}</td>
+      <td>${fmtINR(p.allowances)}</td>
+      <td style="color:#DC2626">-${fmtINR(d.pf)}</td>
+      <td style="color:#DC2626">${d.tds>0?"-"+fmtINR(d.tds):"—"}</td>
+      <td style="font-weight:600">${fmtINR(net)}</td>
+      <td>${payrollPillHTML(p.status)}</td>
+      <td><div class="row-actions">
+        ${p.status==="Pending" ? `<button class="icon-action" data-id="${p.id}" data-act="pay" title="Mark Paid"><i data-lucide="check" style="color:#16A34A"></i></button>` : ""}
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='pay']").forEach(b=> b.addEventListener("click", ()=>{
+    const p = PAYROLL.find(x=>x.id===b.dataset.id);
+    p.status = "Paid";
+    showToast(`Payroll marked paid for ${p.name}`);
+    renderPayrollList();
+  }));
+  icons();
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -3081,6 +3338,7 @@ function renderAll(){
   else if (state.active === "Site Management") renderSiteModule();
   else if (state.active === "Reports & Analytics") renderReportsModule();
   else if (state.active === "Documents") renderDocumentsModule();
+  else if (state.active === "HR & Payroll") renderHRModule();
   else renderPlaceholder(state.active);
   icons();
 }
