@@ -481,11 +481,11 @@ function renderDashboard(){
   main.innerHTML = `
     <section class="grid grid-5" id="kpiRow"></section>
 
-    <section class="grid" style="grid-template-columns:2fr 1fr;gap:20px" id="featuredRow"></section>
+    <section class="grid split-2-1" id="featuredRow"></section>
 
     <section class="grid grid-5" id="moduleRow"></section>
 
-    <section class="grid" style="grid-template-columns:1fr 2fr;gap:20px">
+    <section class="grid split-1-2">
       <div class="card" style="padding:16px">
         <div class="flex-between mt-0"><h3 class="section-title">Project Progress Overview</h3>
           <select style="font-size:11px;border:1px solid #E2E8F0;border-radius:6px;padding:3px 6px"><option>FY 2025-26</option></select></div>
@@ -503,7 +503,7 @@ function renderDashboard(){
       </div>
     </section>
 
-    <section class="grid" style="grid-template-columns:2fr 1fr;gap:20px">
+    <section class="grid split-2-1">
       <div class="card" style="padding:16px">
         <div class="flex-between"><h3 class="section-title">Project Profitability</h3>
           <button class="link-btn" id="profitReportBtn">View Report <i data-lucide="arrow-right" style="width:12px;height:12px"></i></button></div>
@@ -1225,7 +1225,7 @@ function renderPurchaseModule(){
   main.innerHTML = `
     <section class="grid grid-4" id="purchaseSummary"></section>
 
-    <div class="flex gap-2" id="purchaseTabs">
+    <div class="tab-row" id="purchaseTabs">
       <button class="btn-secondary" data-tab="po" id="tabPO">Purchase Orders</button>
       <button class="btn-secondary" data-tab="inventory" id="tabInventory">Inventory</button>
     </div>
@@ -1541,7 +1541,7 @@ function renderLabourModule(){
 
   main.innerHTML = `
     <section class="grid grid-4" id="labourSummary"></section>
-    <div class="flex gap-2" id="labourTabs">
+    <div class="tab-row" id="labourTabs">
       <button class="btn-secondary" id="tabAttendance">Attendance</button>
       <button class="btn-secondary" id="tabContractors">Contractors</button>
     </div>
@@ -1877,7 +1877,7 @@ function renderBillingModule(){
 
   main.innerHTML = `
     <section class="grid grid-4" id="billingSummary"></section>
-    <div class="flex gap-2" id="billingTabs">
+    <div class="tab-row" id="billingTabs">
       <button class="btn-secondary" id="tabInvoices">Client Invoices</button>
       <button class="btn-secondary" id="tabPayments">Payments Received</button>
     </div>
@@ -2182,7 +2182,7 @@ function renderPartiesModule(){
 
   main.innerHTML = `
     <section class="grid grid-4" id="partiesSummary"></section>
-    <div class="flex gap-2" id="partiesTabs">
+    <div class="tab-row" id="partiesTabs">
       <button class="btn-secondary" id="tabClients">Clients</button>
       <button class="btn-secondary" id="tabVendors">Vendors</button>
     </div>
@@ -2507,7 +2507,7 @@ function renderSiteModule(){
 
   main.innerHTML = `
     <section class="grid grid-4" id="siteSummary"></section>
-    <div class="flex gap-2" id="siteTabs">
+    <div class="tab-row" id="siteTabs">
       <button class="btn-secondary" id="tabOverview">Sites Overview</button>
       <button class="btn-secondary" id="tabDPR">Daily Progress Reports</button>
       <button class="btn-secondary" id="tabIssues">Issues & Safety</button>
@@ -2875,8 +2875,8 @@ function renderReportsModule(){
       <div class="grid grid-6" id="mgmtKpis"></div>
     </div>
 
-    <div class="flex" style="gap:16px;align-items:flex-start" id="reportsLayout">
-      <div class="card" id="reportListWrap" style="padding:10px;width:260px;flex-shrink:0"></div>
+    <div class="reports-layout" id="reportsLayout">
+      <div class="card reports-nav" id="reportListWrap" style="padding:10px"></div>
       <div style="flex:1;min-width:0" id="reportBody"></div>
     </div>
   `;
@@ -3161,7 +3161,7 @@ function renderHRModule(){
 
   main.innerHTML = `
     <section class="grid grid-4" id="hrSummary"></section>
-    <div class="flex gap-2" id="hrTabs">
+    <div class="tab-row" id="hrTabs">
       <button class="btn-secondary" id="tabEmployees">Employees</button>
       <button class="btn-secondary" id="tabPayroll">Payroll</button>
     </div>
@@ -3599,7 +3599,7 @@ function renderAIModule(){
 
   main.innerHTML = `
     <section class="grid grid-4" id="aiSummary"></section>
-    <div class="flex gap-2" id="aiTabs">
+    <div class="tab-row" id="aiTabs">
       <button class="btn-secondary" id="tabRisk">Risk Scoring</button>
       <button class="btn-secondary" id="tabPredictions">Predictions</button>
       <button class="btn-secondary" id="tabForecast">Forecasting</button>
@@ -3709,7 +3709,7 @@ function renderPredictionsSection(){
 function renderForecastSection(){
   const body = document.getElementById("aiTabBody");
   body.innerHTML = `
-    <div class="grid" style="grid-template-columns:1.3fr 1fr;gap:20px;margin-top:14px" id="forecastGrid">
+    <div class="grid split-13-1" style="margin-top:14px" id="forecastGrid">
       <div class="card" style="padding:16px">
         <h3 class="section-title mt-0">Cash Flow Forecast — Next 3 Months</h3>
         <p class="tiny muted" style="margin:4px 0 12px">Projected using recent inflow/outflow trend.</p>
@@ -3768,7 +3768,7 @@ function renderForecastSection(){
 function renderSettingsModule(){
   const main = document.getElementById("mainContent");
   main.innerHTML = `
-    <div class="flex gap-2" id="settingsTabs">
+    <div class="tab-row" id="settingsTabs">
       <button class="btn-secondary" id="tabCompany">Company Profile</button>
       <button class="btn-secondary" id="tabUsers">Users & Roles</button>
       <button class="btn-secondary" id="tabPrefs">Notifications</button>
