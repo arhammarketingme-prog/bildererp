@@ -358,7 +358,42 @@ const state = {
   hr: { tab:"employees", query:"" },
   equip: { query:"", status:"All", page:1, pageSize:6 },
   ai: { section:"risk" },
+  settings: { tab:"company" },
 };
+
+/* ---------------------------- Settings data ---------------------------- */
+const ALL_ROLES = [...ROLES, "Client"];
+let COMPANY_PROFILE = {
+  name:"BuildPro Constructions Pvt. Ltd.",
+  gstin:"27AABCB1234C1Z5",
+  address:"4th Floor, Skyline Business Hub, Baner Road, Pune, Maharashtra 411045",
+  phone:"+91 20 4567 8900",
+  email:"info@buildproerp.in",
+  fy:"FY 2025-26",
+  currency:"INR (₹)",
+};
+
+let SYSTEM_USERS = [
+  { id:"USR-01", name:"Admin User", email:"admin@buildpro.in", role:"Super Admin", status:"Active" },
+  { id:"USR-02", name:"Rohit Sharma", email:"rohit.sharma@buildpro.in", role:"Project Manager", status:"Active" },
+  { id:"USR-03", name:"Anita Deshmukh", email:"anita.deshmukh@buildpro.in", role:"Project Manager", status:"Active" },
+  { id:"USR-04", name:"Vikram Patil", email:"vikram.patil@buildpro.in", role:"Site Engineer", status:"Active" },
+  { id:"USR-05", name:"Priya Nair", email:"priya.nair@buildpro.in", role:"Accountant", status:"Active" },
+  { id:"USR-06", name:"Rahul Joshi", email:"rahul.joshi@buildpro.in", role:"Purchase Manager", status:"Active" },
+  { id:"USR-07", name:"Kavita Rane", email:"kavita.rane@buildpro.in", role:"HR", status:"Inactive" },
+  { id:"USR-08", name:"Ramesh Kohinoor", email:"ramesh@kohinoorgroup.in", role:"Client", status:"Active" },
+];
+
+let NOTIF_PREFS = [
+  { key:"costOverrun", label:"Cost Overrun Alerts", desc:"Notify when a project risks exceeding its budget", on:true },
+  { key:"projectDelay", label:"Project Delay Alerts", desc:"Notify when a project falls behind schedule", on:true },
+  { key:"lowStock", label:"Low Stock Alerts", desc:"Notify when inventory falls below reorder level", on:true },
+  { key:"invoiceOverdue", label:"Invoice Overdue Reminders", desc:"Notify when client invoices become overdue", on:true },
+  { key:"paymentReceived", label:"Payment Received", desc:"Notify when a payment is recorded", on:false },
+  { key:"boqApproval", label:"BOQ Approval Requests", desc:"Notify when a BOQ needs approval", on:true },
+  { key:"purchaseApproval", label:"Purchase Approval Requests", desc:"Notify when a PO needs approval", on:false },
+  { key:"safetyIncident", label:"Safety Incidents", desc:"Notify immediately on safety incidents", on:true },
+];
 
 /* ---------------------------- Equipment data ---------------------------- */
 const EQUIP_CATEGORIES = ["Excavator", "Tower Crane", "Mobile Crane", "Concrete Mixer", "JCB / Backhoe", "Dumper", "Generator", "Scaffolding", "Compactor"];
@@ -3729,6 +3764,199 @@ function renderForecastSection(){
   icons();
 }
 
+/* ---------------------------- Settings module ---------------------------- */
+function renderSettingsModule(){
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `
+    <div class="flex gap-2" id="settingsTabs">
+      <button class="btn-secondary" id="tabCompany">Company Profile</button>
+      <button class="btn-secondary" id="tabUsers">Users & Roles</button>
+      <button class="btn-secondary" id="tabPrefs">Notifications</button>
+    </div>
+    <div id="settingsTabBody"></div>
+  `;
+  document.getElementById("tabCompany").addEventListener("click", ()=>{ state.settings.tab="company"; renderSettingsTab(); });
+  document.getElementById("tabUsers").addEventListener("click", ()=>{ state.settings.tab="users"; renderSettingsTab(); });
+  document.getElementById("tabPrefs").addEventListener("click", ()=>{ state.settings.tab="prefs"; renderSettingsTab(); });
+  renderSettingsTab();
+  icons();
+}
+
+function renderSettingsTab(){
+  document.getElementById("tabCompany").classList.toggle("btn-primary", state.settings.tab==="company");
+  document.getElementById("tabCompany").classList.toggle("btn-secondary", state.settings.tab!=="company");
+  document.getElementById("tabUsers").classList.toggle("btn-primary", state.settings.tab==="users");
+  document.getElementById("tabUsers").classList.toggle("btn-secondary", state.settings.tab!=="users");
+  document.getElementById("tabPrefs").classList.toggle("btn-primary", state.settings.tab==="prefs");
+  document.getElementById("tabPrefs").classList.toggle("btn-secondary", state.settings.tab!=="prefs");
+  if (state.settings.tab==="company") renderCompanyTab();
+  else if (state.settings.tab==="users") renderUsersTab();
+  else renderPrefsTab();
+  icons();
+}
+
+function renderCompanyTab(){
+  const body = document.getElementById("settingsTabBody");
+  const c = COMPANY_PROFILE;
+  body.innerHTML = `
+    <div class="card mt-3" style="padding:20px;max-width:640px">
+      <div class="flex gap-2" style="align-items:center;margin-bottom:16px">
+        <div class="brand-mark" style="width:44px;height:44px;font-size:18px">B</div>
+        <div><p style="font-weight:600;font-size:14px;margin:0">BuildPro ERP</p><p class="tiny muted" style="margin:0">Build Better. Manage Smarter.</p></div>
+      </div>
+      <div class="modal-body grid2" style="padding:0">
+        <div class="field col-span-2"><label>Company Name</label><input id="s_name" value="${c.name}"/></div>
+        <div class="field"><label>GSTIN</label><input id="s_gstin" value="${c.gstin}"/></div>
+        <div class="field"><label>Phone</label><input id="s_phone" value="${c.phone}"/></div>
+        <div class="field col-span-2"><label>Registered Address</label><input id="s_address" value="${c.address}"/></div>
+        <div class="field"><label>Email</label><input id="s_email" value="${c.email}"/></div>
+        <div class="field"><label>Currency</label><select id="s_currency"><option ${c.currency.includes("INR")?"selected":""}>INR (₹)</option><option>USD ($)</option></select></div>
+        <div class="field col-span-2"><label>Default Financial Year</label>
+          <select id="s_fy"><option ${c.fy==="FY 2025-26"?"selected":""}>FY 2025-26</option><option ${c.fy==="FY 2024-25"?"selected":""}>FY 2024-25</option></select>
+        </div>
+      </div>
+      <div class="flex-between mt-3">
+        <p class="tiny muted">Last updated just now</p>
+        <button class="btn-primary" id="saveCompanyBtn">Save Changes</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("saveCompanyBtn").addEventListener("click", ()=>{
+    COMPANY_PROFILE = {
+      name: document.getElementById("s_name").value.trim() || c.name,
+      gstin: document.getElementById("s_gstin").value.trim(),
+      address: document.getElementById("s_address").value.trim(),
+      phone: document.getElementById("s_phone").value.trim(),
+      email: document.getElementById("s_email").value.trim(),
+      fy: document.getElementById("s_fy").value,
+      currency: document.getElementById("s_currency").value,
+    };
+    showToast("Company profile updated");
+  });
+}
+
+function renderUsersTab(){
+  const body = document.getElementById("settingsTabBody");
+  body.innerHTML = `
+    <div class="toolbar mt-3">
+      <p class="tiny muted" style="flex:1">Manage who can log in and what they can access.</p>
+      <button class="btn-primary" id="newUserBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New User</button>
+    </div>
+    <div class="card mt-2" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody id="usersTbody"></tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("newUserBtn").addEventListener("click", ()=> openUserFormModal(null));
+  renderUsersList();
+  icons();
+}
+
+function renderUsersList(){
+  const tbody = document.getElementById("usersTbody");
+  tbody.innerHTML = "";
+  SYSTEM_USERS.forEach(u=>{
+    const active = u.status==="Active";
+    tbody.appendChild(el(`<tr>
+      <td style="font-weight:600">${u.name}</td>
+      <td class="tiny">${u.email}</td>
+      <td><span class="pill" style="color:#2563EB;background:#DBEAFE">${u.role}</span></td>
+      <td><span class="pill" style="color:${active?'#16A34A':'#64748B'};background:${active?'#DCFCE7':'#F1F5F9'}"><span class="dot-sm" style="background:${active?'#16A34A':'#64748B'}"></span>${u.status}</span></td>
+      <td><div class="row-actions">
+        <button class="icon-action" data-act="toggle" data-id="${u.id}" title="${active?'Deactivate':'Activate'}"><i data-lucide="${active?'user-x':'user-check'}"></i></button>
+        <button class="icon-action edit" data-act="edit" data-id="${u.id}"><i data-lucide="pencil"></i></button>
+        <button class="icon-action del" data-act="del" data-id="${u.id}"><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`));
+  });
+  tbody.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openUserFormModal(SYSTEM_USERS.find(u=>u.id===b.dataset.id))));
+  tbody.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    SYSTEM_USERS = SYSTEM_USERS.filter(u=>u.id!==b.dataset.id);
+    showToast("User removed");
+    renderUsersList();
+  }));
+  tbody.querySelectorAll("[data-act='toggle']").forEach(b=> b.addEventListener("click", ()=>{
+    const u = SYSTEM_USERS.find(x=>x.id===b.dataset.id);
+    u.status = u.status==="Active" ? "Inactive" : "Active";
+    showToast(`${u.name} ${u.status==="Active"?"activated":"deactivated"}`);
+    renderUsersList();
+  }));
+  icons();
+}
+
+function openUserFormModal(user){
+  const isEdit = !!user;
+  const f = user || { name:"", email:"", role:ALL_ROLES[0], status:"Active" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit User" : "New User"}</h3><button class="icon-btn" id="closeUF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field col-span-2"><label>Full Name</label><input id="u_name" value="${f.name}"/></div>
+          <div class="field col-span-2"><label>Email</label><input id="u_email" value="${f.email}"/></div>
+          <div class="field"><label>Role</label><select id="u_role">${ALL_ROLES.map(r=>`<option ${r===f.role?"selected":""}>${r}</option>`).join("")}</select></div>
+          <div class="field"><label>Status</label><select id="u_status"><option ${f.status==="Active"?"selected":""}>Active</option><option ${f.status==="Inactive"?"selected":""}>Inactive</option></select></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelUF">Cancel</button>
+          <button class="btn-primary" id="saveUF">${isEdit ? "Save Changes" : "Add User"}</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeUF").addEventListener("click", closeModal);
+  node.querySelector("#cancelUF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveUF").addEventListener("click", ()=>{
+    const payload = {
+      name: node.querySelector("#u_name").value.trim() || "Unnamed User",
+      email: node.querySelector("#u_email").value.trim(),
+      role: node.querySelector("#u_role").value,
+      status: node.querySelector("#u_status").value,
+    };
+    if (isEdit){
+      Object.assign(user, payload);
+      showToast(`${user.name} updated`);
+    } else {
+      const id = `USR-${String(SYSTEM_USERS.length+1).padStart(2,"0")}`;
+      SYSTEM_USERS = [{ id, ...payload }, ...SYSTEM_USERS];
+      showToast(`${payload.name} added`);
+    }
+    closeModal();
+    renderUsersList();
+  });
+  openModalNode(node);
+}
+
+function renderPrefsTab(){
+  const body = document.getElementById("settingsTabBody");
+  body.innerHTML = `
+    <div class="card mt-3" style="padding:16px;max-width:640px">
+      <h3 class="section-title mt-0">Notification Preferences</h3>
+      <p class="tiny muted" style="margin:4px 0 14px">Choose which alerts trigger a notification.</p>
+      <div class="flex-col gap-3" id="prefsList"></div>
+    </div>
+  `;
+  const wrap = document.getElementById("prefsList");
+  NOTIF_PREFS.forEach(p=>{
+    wrap.insertAdjacentHTML("beforeend", `
+      <div class="flex-between" style="padding:10px 0;border-bottom:1px solid #F1F5F9">
+        <div style="max-width:420px">
+          <p style="font-size:13px;font-weight:600;margin:0">${p.label}</p>
+          <p class="tiny muted" style="margin:2px 0 0">${p.desc}</p>
+        </div>
+        <button class="btn-secondary" data-key="${p.key}" style="min-width:70px;${p.on?'background:#DCFCE7;color:#16A34A;border-color:#DCFCE7':''}">${p.on?"On":"Off"}</button>
+      </div>`);
+  });
+  wrap.querySelectorAll("button[data-key]").forEach(b=> b.addEventListener("click", ()=>{
+    const pref = NOTIF_PREFS.find(p=>p.key===b.dataset.key);
+    pref.on = !pref.on;
+    renderPrefsTab();
+    showToast(`${pref.label} turned ${pref.on?"on":"off"}`);
+  }));
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -3761,6 +3989,7 @@ function renderAll(){
   else if (state.active === "HR & Payroll") renderHRModule();
   else if (state.active === "Equipment") renderEquipmentModule();
   else if (state.active === "AI Insights") renderAIModule();
+  else if (state.active === "Settings") renderSettingsModule();
   else renderPlaceholder(state.active);
   icons();
 }
