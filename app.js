@@ -356,7 +356,29 @@ const state = {
   reports: { active:"cost", project:"All" },
   docs: { query:"", project:"All", category:"All", page:1, pageSize:8 },
   hr: { tab:"employees", query:"" },
+  equip: { query:"", status:"All", page:1, pageSize:6 },
 };
+
+/* ---------------------------- Equipment data ---------------------------- */
+const EQUIP_CATEGORIES = ["Excavator", "Tower Crane", "Mobile Crane", "Concrete Mixer", "JCB / Backhoe", "Dumper", "Generator", "Scaffolding", "Compactor"];
+const EQUIP_STATUS_META = {
+  "Deployed": {fg:"#16A34A", bg:"#DCFCE7"},
+  "Idle": {fg:"#64748B", bg:"#F1F5F9"},
+  "Under Maintenance": {fg:"#EA580C", bg:"#FFEDD5"},
+};
+
+let EQUIPMENT = [
+  { id:"EQ-01", name:"Tower Crane TC-5013", category:"Tower Crane", project:"Green Park Residency", status:"Deployed", operator:"Mahesh Yadav", ownership:"Owned", lastService:"2026-07-10", nextService:"2026-09-10" },
+  { id:"EQ-02", name:"Excavator JS-220", category:"Excavator", project:"Blue Ridge Tower", status:"Deployed", operator:"Ganesh More", ownership:"Rented", lastService:"2026-06-28", nextService:"2026-08-28" },
+  { id:"EQ-03", name:"JCB 3DX Backhoe", category:"JCB / Backhoe", project:"Emerald Business Park", status:"Under Maintenance", operator:"—", ownership:"Owned", lastService:"2026-08-01", nextService:"2026-08-16" },
+  { id:"EQ-04", name:"Concrete Mixer CM-500", category:"Concrete Mixer", project:"Sunrise Apartments", status:"Deployed", operator:"Ravi Kadam", ownership:"Owned", lastService:"2026-07-20", nextService:"2026-09-20" },
+  { id:"EQ-05", name:"Mobile Crane 25T", category:"Mobile Crane", project:"Metro Heights", status:"Deployed", operator:"Sanjay Bhosale", ownership:"Rented", lastService:"2026-07-05", nextService:"2026-09-05" },
+  { id:"EQ-06", name:"Diesel Generator 125kVA", category:"Generator", project:"Silver County", status:"Deployed", operator:"—", ownership:"Owned", lastService:"2026-06-15", nextService:"2026-08-15" },
+  { id:"EQ-07", name:"Dumper Truck DT-12", category:"Dumper", project:"Green Park Residency", status:"Idle", operator:"—", ownership:"Owned", lastService:"2026-05-30", nextService:"2026-08-30" },
+  { id:"EQ-08", name:"Plate Compactor PC-90", category:"Compactor", project:"Palm Grove Estate", status:"Idle", operator:"—", ownership:"Owned", lastService:"2026-05-10", nextService:"2026-08-10" },
+  { id:"EQ-09", name:"Steel Scaffolding Set A", category:"Scaffolding", project:"Riverfront Villas", status:"Idle", operator:"—", ownership:"Rented", lastService:"2026-04-22", nextService:"2026-09-22" },
+];
+
 
 /* ---------------------------- sidebar render ---------------------------- */
 function renderNav(){
@@ -3309,6 +3331,175 @@ function renderPayrollList(){
   icons();
 }
 
+/* ---------------------------- Equipment module ---------------------------- */
+function equipPillHTML(status){
+  const m = EQUIP_STATUS_META[status] || EQUIP_STATUS_META["Idle"];
+  return `<span class="pill" style="color:${m.fg};background:${m.bg}"><span class="dot-sm" style="background:${m.fg}"></span>${status}</span>`;
+}
+function equipServiceDue(item){ return item.nextService <= "2026-08-20"; }
+
+function getFilteredEquipment(){
+  const { query, status } = state.equip;
+  return EQUIPMENT.filter(e =>
+    (status==="All" || e.status===status) &&
+    (e.name.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()) || e.project.toLowerCase().includes(query.toLowerCase()))
+  );
+}
+
+function renderEquipmentModule(){
+  const main = document.getElementById("mainContent");
+  const deployed = EQUIPMENT.filter(e=>e.status==="Deployed").length;
+  const maintenance = EQUIPMENT.filter(e=>e.status==="Under Maintenance").length;
+  const dueSoon = EQUIPMENT.filter(equipServiceDue).length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="equipSummary"></section>
+    <div class="toolbar">
+      <div class="search-wrap"><i data-lucide="search"></i><input type="text" id="equipSearch" placeholder="Search equipment, category, or project…" value="${state.equip.query}"/></div>
+      <select id="equipStatusFilter"></select>
+      <button class="btn-primary" id="newEquipBtn"><i data-lucide="plus" style="width:15px;height:15px"></i>New Equipment</button>
+    </div>
+    <p class="tiny muted" id="equipResultCount"></p>
+    <div class="grid grid-3" id="equipCards"></div>
+    <div class="pagination" id="equipPagination" style="display:none">
+      <p class="tiny muted" id="equipPageInfo"></p>
+      <div class="flex gap-2"><button class="pg-btn" id="equipPrevPage"><i data-lucide="chevron-left"></i></button><button class="pg-btn" id="equipNextPage"><i data-lucide="chevron-right"></i></button></div>
+    </div>
+  `;
+
+  const summaryWrap = document.getElementById("equipSummary");
+  [
+    { label:"Total Equipment", value:EQUIPMENT.length, icon:"wrench", tint:"blue" },
+    { label:"Deployed", value:deployed, icon:"check-circle-2", tint:"green" },
+    { label:"Under Maintenance", value:maintenance, icon:"alert-circle", tint:"orange" },
+    { label:"Service Due Soon", value:dueSoon, icon:"clock", tint:"navy" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  const statusFilter = document.getElementById("equipStatusFilter");
+  statusFilter.innerHTML = `<option>All</option>` + Object.keys(EQUIP_STATUS_META).map(s=>`<option>${s}</option>`).join("");
+  statusFilter.value = state.equip.status;
+
+  document.getElementById("equipSearch").addEventListener("input", (e)=>{ state.equip.query=e.target.value; state.equip.page=1; renderEquipmentList(); });
+  statusFilter.addEventListener("change", (e)=>{ state.equip.status=e.target.value; state.equip.page=1; renderEquipmentList(); });
+  document.getElementById("newEquipBtn").addEventListener("click", ()=> openEquipmentFormModal(null));
+
+  renderEquipmentList();
+  icons();
+}
+
+function renderEquipmentList(){
+  const filtered = getFilteredEquipment();
+  const { pageSize } = state.equip;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.equip.page > totalPages) state.equip.page = totalPages;
+  const pageRows = filtered.slice((state.equip.page-1)*pageSize, state.equip.page*pageSize);
+
+  document.getElementById("equipResultCount").textContent = `${filtered.length} equipment items found`;
+  const wrap = document.getElementById("equipCards");
+  wrap.innerHTML = "";
+  if (pageRows.length===0){
+    wrap.innerHTML = `<div class="card" style="padding:36px;text-align:center;color:#94a3b8;font-size:13px;grid-column:1/-1">No equipment matches your filters.</div>`;
+  }
+  pageRows.forEach(e=>{
+    const dueSoon = equipServiceDue(e);
+    wrap.appendChild(el(`
+      <div class="card proj-card">
+        <div class="flex-between" style="align-items:flex-start;margin-bottom:6px">
+          <div><p style="font-weight:600;font-size:13px;margin:0">${e.name}</p><p style="font-size:11px;color:#64748b;margin:0">${e.category}</p></div>
+          ${equipPillHTML(e.status)}
+        </div>
+        <p class="tiny muted" style="margin:0 0 10px">${e.project} · ${e.ownership}${e.operator!=="—" ? " · Operator: "+e.operator : ""}</p>
+        <div class="module-rows" style="margin:0 0 10px">
+          <div><p class="k">Last Service</p><p class="v" style="font-size:12px">${e.lastService}</p></div>
+          <div><p class="k">Next Service</p><p class="v" style="font-size:12px;color:${dueSoon?'#DC2626':'#1e293b'}">${e.nextService}</p></div>
+        </div>
+        ${dueSoon ? `<span class="pill" style="color:#DC2626;background:#FEE2E2;margin-bottom:8px"><span class="dot-sm" style="background:#DC2626"></span>Service Due Soon</span>` : ""}
+        <div class="row-actions mt-2" style="border-top:1px solid #F1F5F9;padding-top:8px">
+          <button class="icon-action edit" data-act="edit" data-id="${e.id}"><i data-lucide="pencil"></i></button>
+          <button class="icon-action del" data-act="del" data-id="${e.id}"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`));
+  });
+  wrap.querySelectorAll("[data-act='edit']").forEach(b=> b.addEventListener("click", ()=> openEquipmentFormModal(EQUIPMENT.find(e=>e.id===b.dataset.id))));
+  wrap.querySelectorAll("[data-act='del']").forEach(b=> b.addEventListener("click", ()=>{
+    EQUIPMENT = EQUIPMENT.filter(e=>e.id!==b.dataset.id);
+    showToast("Equipment removed");
+    renderEquipmentList();
+  }));
+
+  const pag = document.getElementById("equipPagination");
+  if (totalPages > 1){
+    pag.style.display = "flex";
+    document.getElementById("equipPageInfo").textContent = `Page ${state.equip.page} of ${totalPages}`;
+    const prev = document.getElementById("equipPrevPage"), next = document.getElementById("equipNextPage");
+    prev.disabled = state.equip.page===1; next.disabled = state.equip.page===totalPages;
+    prev.onclick = ()=>{ state.equip.page--; renderEquipmentList(); icons(); };
+    next.onclick = ()=>{ state.equip.page++; renderEquipmentList(); icons(); };
+  } else { pag.style.display = "none"; }
+  icons();
+}
+
+function openEquipmentFormModal(item){
+  const isEdit = !!item;
+  const projectNames = [...new Set(PROJECTS.map(p=>p.name))];
+  const f = item || { name:"", category:EQUIP_CATEGORIES[0], project:projectNames[0]||"", status:"Idle", operator:"", ownership:"Owned", lastService:"", nextService:"" };
+  const node = el(`
+    <div class="modal-backdrop">
+      <div class="modal-box wide">
+        <div class="modal-head"><h3>${isEdit ? "Edit Equipment" : "New Equipment"}</h3><button class="icon-btn" id="closeEQF"><i data-lucide="x"></i></button></div>
+        <div class="modal-body grid2">
+          <div class="field col-span-2"><label>Equipment Name</label><input id="eq_name" value="${f.name}"/></div>
+          <div class="field"><label>Category</label><select id="eq_category">${EQUIP_CATEGORIES.map(c=>`<option ${c===f.category?"selected":""}>${c}</option>`).join("")}</select></div>
+          <div class="field"><label>Project</label><select id="eq_project">${projectNames.map(p=>`<option ${p===f.project?"selected":""}>${p}</option>`).join("")}</select></div>
+          <div class="field"><label>Status</label><select id="eq_status">${Object.keys(EQUIP_STATUS_META).map(s=>`<option ${s===f.status?"selected":""}>${s}</option>`).join("")}</select></div>
+          <div class="field"><label>Ownership</label><select id="eq_ownership"><option ${f.ownership==="Owned"?"selected":""}>Owned</option><option ${f.ownership==="Rented"?"selected":""}>Rented</option></select></div>
+          <div class="field"><label>Operator</label><input id="eq_operator" value="${f.operator}" placeholder="Leave blank if unassigned"/></div>
+          <div class="field"><label>Last Service Date</label><input type="date" id="eq_lastService" value="${f.lastService}"/></div>
+          <div class="field"><label>Next Service Date</label><input type="date" id="eq_nextService" value="${f.nextService}"/></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" id="cancelEQF">Cancel</button>
+          <button class="btn-primary" id="saveEQF">${isEdit ? "Save Changes" : "Add Equipment"}</button>
+        </div>
+      </div>
+    </div>`);
+  node.querySelector("#closeEQF").addEventListener("click", closeModal);
+  node.querySelector("#cancelEQF").addEventListener("click", closeModal);
+  node.addEventListener("click", (e)=>{ if(e.target===node) closeModal(); });
+  node.querySelector("#saveEQF").addEventListener("click", ()=>{
+    const payload = {
+      name: node.querySelector("#eq_name").value.trim() || "Unnamed Equipment",
+      category: node.querySelector("#eq_category").value,
+      project: node.querySelector("#eq_project").value,
+      status: node.querySelector("#eq_status").value,
+      ownership: node.querySelector("#eq_ownership").value,
+      operator: node.querySelector("#eq_operator").value.trim() || "—",
+      lastService: node.querySelector("#eq_lastService").value,
+      nextService: node.querySelector("#eq_nextService").value,
+    };
+    if (isEdit){
+      Object.assign(item, payload);
+      showToast(`${item.name} updated`);
+    } else {
+      const id = `EQ-${String(EQUIPMENT.length+1).padStart(2,"0")}`;
+      EQUIPMENT = [{ id, ...payload }, ...EQUIPMENT];
+      showToast(`${payload.name} added`);
+      state.equip.page = 1;
+    }
+    closeModal();
+    renderEquipmentList();
+  });
+  openModalNode(node);
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -3339,6 +3530,7 @@ function renderAll(){
   else if (state.active === "Reports & Analytics") renderReportsModule();
   else if (state.active === "Documents") renderDocumentsModule();
   else if (state.active === "HR & Payroll") renderHRModule();
+  else if (state.active === "Equipment") renderEquipmentModule();
   else renderPlaceholder(state.active);
   icons();
 }
