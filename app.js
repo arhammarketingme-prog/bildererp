@@ -357,6 +357,7 @@ const state = {
   docs: { query:"", project:"All", category:"All", page:1, pageSize:8 },
   hr: { tab:"employees", query:"" },
   equip: { query:"", status:"All", page:1, pageSize:6 },
+  ai: { section:"risk" },
 };
 
 /* ---------------------------- Equipment data ---------------------------- */
@@ -3500,6 +3501,234 @@ function openEquipmentFormModal(item){
   openModalNode(node);
 }
 
+/* ---------------------------- AI Insights module ---------------------------- */
+const TODAY = "2026-08-15";
+function daysBetween(d1,d2){ return (new Date(d2) - new Date(d1)) / 86400000; }
+
+function projectBoqVariancePct(projectName){
+  const items = BOQS.filter(b=> b.project===projectName && b.actual>0);
+  if (items.length===0) return 0;
+  const totalEst = items.reduce((s,b)=> s+boqEstAmount(b), 0);
+  const totalVar = items.reduce((s,b)=> s+boqVariance(b), 0);
+  return totalEst>0 ? (totalVar/totalEst*100) : 0;
+}
+function projectTimelineProgress(p){
+  const total = daysBetween(p.start, p.end);
+  const elapsed = daysBetween(p.start, TODAY);
+  if (total<=0) return 0;
+  return Math.max(0, Math.min(100, (elapsed/total)*100));
+}
+function projectOpenIssues(projectName){
+  return ISSUES.filter(i=> i.site===projectName && i.status!=="Resolved").length;
+}
+function projectOverdueInvoice(projectName){
+  return INVOICES.some(i=> i.project===projectName && i.status==="Overdue");
+}
+function computeRiskScore(p){
+  const timelineProgress = projectTimelineProgress(p);
+  const completionGap = Math.max(0, timelineProgress - p.completion);
+  const variancePct = Math.max(0, projectBoqVariancePct(p.name));
+  const openIssues = projectOpenIssues(p.name);
+  const overdue = projectOverdueInvoice(p.name);
+  let score = completionGap*0.7 + variancePct*1.1 + openIssues*9 + (overdue?15:0);
+  score = Math.round(Math.max(3, Math.min(96, score)));
+  return { score, timelineProgress, completionGap, variancePct, openIssues, overdue };
+}
+function riskLabel(score){
+  if (score<=33) return { label:"Low Risk", fg:"#16A34A", bg:"#DCFCE7" };
+  if (score<=66) return { label:"Medium Risk", fg:"#EA580C", bg:"#FFEDD5" };
+  return { label:"High Risk", fg:"#DC2626", bg:"#FEE2E2" };
+}
+function predictedFinalCost(p, variancePct){
+  return p.contract * (1 + (variancePct/100)*0.6);
+}
+function delayLabel(gap){
+  if (gap<=5) return { label:"On Schedule", fg:"#16A34A", bg:"#DCFCE7" };
+  if (gap<=15) return { label:"At Risk", fg:"#EA580C", bg:"#FFEDD5" };
+  return { label:"Likely Delayed", fg:"#DC2626", bg:"#FEE2E2" };
+}
+function invWeeklyRate(item){ return item.consumed / 26; }
+function invWeeksToStockout(item){
+  const rate = invWeeklyRate(item);
+  const avail = invAvailable(item);
+  if (rate<=0) return null;
+  return Math.max(0, Math.round(avail/rate));
+}
+
+function renderAIModule(){
+  const main = document.getElementById("mainContent");
+  const risks = PROJECTS.map(p=> ({ p, r: computeRiskScore(p) }));
+  const highRiskCount = risks.filter(x=> x.r.score>66).length;
+  const avgScore = Math.round(risks.reduce((s,x)=> s+x.r.score,0) / risks.length);
+  const delayedCount = risks.filter(x=> x.r.completionGap>15).length;
+
+  main.innerHTML = `
+    <section class="grid grid-4" id="aiSummary"></section>
+    <div class="flex gap-2" id="aiTabs">
+      <button class="btn-secondary" id="tabRisk">Risk Scoring</button>
+      <button class="btn-secondary" id="tabPredictions">Predictions</button>
+      <button class="btn-secondary" id="tabForecast">Forecasting</button>
+    </div>
+    <div id="aiTabBody"></div>
+  `;
+
+  const summaryWrap = document.getElementById("aiSummary");
+  [
+    { label:"Avg. Risk Score", value:avgScore+" / 100", icon:"sparkles", tint:"blue" },
+    { label:"High Risk Projects", value:highRiskCount, icon:"alert-circle", tint:"orange" },
+    { label:"Likely Delayed", value:delayedCount, icon:"clock", tint:"navy" },
+    { label:"Low Stock Materials", value:INVENTORY.filter(invLowStock).length, icon:"package-x", tint:"green" },
+  ].forEach(c=>{
+    const tint = TINT[c.tint];
+    summaryWrap.insertAdjacentHTML("beforeend", `
+      <div class="card" style="padding:14px">
+        <div class="kpi-icon" style="width:32px;height:32px;background:${tint.bg};color:${tint.fg};margin-bottom:8px"><i data-lucide="${c.icon}" style="width:15px;height:15px"></i></div>
+        <p style="font-size:17px;font-weight:700;margin:0">${c.value}</p>
+        <p class="tiny muted" style="margin:2px 0 0">${c.label}</p>
+      </div>`);
+  });
+
+  document.getElementById("tabRisk").addEventListener("click", ()=>{ state.ai.section="risk"; renderAITab(); });
+  document.getElementById("tabPredictions").addEventListener("click", ()=>{ state.ai.section="predictions"; renderAITab(); });
+  document.getElementById("tabForecast").addEventListener("click", ()=>{ state.ai.section="forecast"; renderAITab(); });
+
+  renderAITab();
+  icons();
+}
+
+function renderAITab(){
+  ["tabRisk","tabPredictions","tabForecast"].forEach(id=>{
+    const key = id==="tabRisk"?"risk": id==="tabPredictions"?"predictions":"forecast";
+    document.getElementById(id).classList.toggle("btn-primary", state.ai.section===key);
+    document.getElementById(id).classList.toggle("btn-secondary", state.ai.section!==key);
+  });
+  if (state.ai.section==="risk") renderRiskSection();
+  else if (state.ai.section==="predictions") renderPredictionsSection();
+  else renderForecastSection();
+  icons();
+}
+
+function renderRiskSection(){
+  const body = document.getElementById("aiTabBody");
+  body.innerHTML = `
+    <div class="flex gap-2" style="align-items:center;margin:14px 0 4px">
+      <div class="module-icon" style="background:#eef2ff;color:#4f46e5"><i data-lucide="sparkles"></i></div>
+      <p class="tiny muted" style="margin:0">AI-generated risk score (0–100) per project, based on schedule slippage, BOQ cost variance, open site issues, and overdue billing.</p>
+    </div>
+    <div class="grid grid-3 mt-2" id="riskCards"></div>
+  `;
+  const wrap = document.getElementById("riskCards");
+  PROJECTS.forEach(p=>{
+    const r = computeRiskScore(p);
+    const lvl = riskLabel(r.score);
+    wrap.appendChild(el(`
+      <div class="card" style="padding:16px">
+        <div class="flex-between" style="align-items:flex-start;margin-bottom:10px">
+          <div><p style="font-weight:600;font-size:13px;margin:0">${p.name}</p><p class="tiny muted" style="margin:2px 0 0">${p.location}</p></div>
+        </div>
+        <div class="flex-between" style="align-items:center;margin-bottom:8px">
+          <span style="font-size:22px;font-weight:700">${r.score}</span>
+          <span class="tiny muted">/ 100</span>
+          <span class="pill" style="color:${lvl.fg};background:${lvl.bg};margin-left:auto">${lvl.label}</span>
+        </div>
+        <div class="kpi-bar" style="height:6px;margin-bottom:12px"><div style="width:${r.score}%;background:${lvl.fg};opacity:1"></div></div>
+        <div class="flex" style="flex-wrap:wrap;gap:6px">
+          <span class="pill" style="color:#475569;background:#F1F5F9">Schedule gap: ${r.completionGap.toFixed(0)}%</span>
+          <span class="pill" style="color:#475569;background:#F1F5F9">Cost variance: ${r.variancePct.toFixed(1)}%</span>
+          <span class="pill" style="color:#475569;background:#F1F5F9">Open issues: ${r.openIssues}</span>
+          ${r.overdue ? `<span class="pill" style="color:#DC2626;background:#FEE2E2">Overdue billing</span>` : ""}
+        </div>
+      </div>`));
+  });
+}
+
+function renderPredictionsSection(){
+  const body = document.getElementById("aiTabBody");
+  body.innerHTML = `
+    <div class="card mt-3" style="padding:16px;overflow-x:auto">
+      <h3 class="section-title mt-0">Cost, Delay & Profit Predictions</h3>
+      <p class="tiny muted" style="margin:4px 0 12px">Projected final cost, schedule outlook, and profit margin per project.</p>
+      <table>
+        <thead><tr><th>Project</th><th>Contract Value</th><th>Predicted Final Cost</th><th>Schedule Outlook</th><th>Profit Prediction</th></tr></thead>
+        <tbody id="predTbody"></tbody>
+      </table>
+    </div>
+  `;
+  const tbody = document.getElementById("predTbody");
+  PROJECTS.forEach((p,i)=>{
+    const r = computeRiskScore(p);
+    const finalCost = predictedFinalCost(p, r.variancePct);
+    const dLabel = delayLabel(r.completionGap);
+    const val = PROFIT_VALUES[i % PROFIT_VALUES.length];
+    tbody.insertAdjacentHTML("beforeend", `<tr>
+      <td style="font-weight:600">${p.name}</td>
+      <td>${fmtINR(p.contract)}</td>
+      <td style="font-weight:600;color:${finalCost>p.contract?'#DC2626':'#16A34A'}">${fmtINR(finalCost)}</td>
+      <td><span class="pill" style="color:${dLabel.fg};background:${dLabel.bg}">${dLabel.label}</span></td>
+      <td style="font-weight:600;color:${val>=0?'#16A34A':'#DC2626'}">${(val>=0?"+":"")+val} L</td>
+    </tr>`);
+  });
+  icons();
+}
+
+function renderForecastSection(){
+  const body = document.getElementById("aiTabBody");
+  body.innerHTML = `
+    <div class="grid" style="grid-template-columns:1.3fr 1fr;gap:20px;margin-top:14px" id="forecastGrid">
+      <div class="card" style="padding:16px">
+        <h3 class="section-title mt-0">Cash Flow Forecast — Next 3 Months</h3>
+        <p class="tiny muted" style="margin:4px 0 12px">Projected using recent inflow/outflow trend.</p>
+        <div style="height:220px"><canvas id="forecastChart"></canvas></div>
+      </div>
+      <div class="card" style="padding:16px">
+        <h3 class="section-title mt-0">Material Forecasting</h3>
+        <p class="tiny muted" style="margin:4px 0 12px">Estimated weeks until stock runs out.</p>
+        <div class="flex-col gap-2" id="materialForecastList"></div>
+      </div>
+    </div>
+  `;
+
+  const avgDeltaIn = (CASHFLOW_IN[11]-CASHFLOW_IN[8])/3;
+  const avgDeltaOut = (CASHFLOW_OUT[11]-CASHFLOW_OUT[8])/3;
+  const futureLabels = ["Apr+1","May+1","Jun+1"];
+  const futureIn = [1,2,3].map(i=> +(CASHFLOW_IN[11] + avgDeltaIn*i).toFixed(2));
+  const futureOut = [1,2,3].map(i=> +(CASHFLOW_OUT[11] + avgDeltaOut*i).toFixed(2));
+
+  destroyCharts();
+  chartRefs.forecastChart = new Chart(document.getElementById("forecastChart"), {
+    type:"line",
+    data:{
+      labels: [...CASHFLOW_LABELS.slice(-4), ...futureLabels],
+      datasets:[
+        { label:"Actual Inflow", data:[...CASHFLOW_IN.slice(-4), null,null,null], borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.1)", tension:.35, pointRadius:2 },
+        { label:"Forecast Inflow", data:[null,null,null,CASHFLOW_IN[11], ...futureIn], borderColor:"#2563EB", borderDash:[6,4], backgroundColor:"transparent", tension:.35, pointRadius:2 },
+        { label:"Actual Outflow", data:[...CASHFLOW_OUT.slice(-4), null,null,null], borderColor:"#EA580C", backgroundColor:"rgba(234,88,12,.08)", tension:.35, pointRadius:2 },
+        { label:"Forecast Outflow", data:[null,null,null,CASHFLOW_OUT[11], ...futureOut], borderColor:"#EA580C", borderDash:[6,4], backgroundColor:"transparent", tension:.35, pointRadius:2 },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:"top", labels:{boxWidth:10, font:{size:10}}} },
+      scales:{ x:{grid:{display:false}, ticks:{font:{size:10}}}, y:{grid:{color:"#F1F5F9"}, ticks:{font:{size:10}, callback:(v)=>`₹${v}Cr`}} }
+    }
+  });
+
+  const matWrap = document.getElementById("materialForecastList");
+  INVENTORY.forEach(item=>{
+    const weeks = invWeeksToStockout(item);
+    const low = weeks!==null && weeks<=4;
+    matWrap.insertAdjacentHTML("beforeend", `
+      <div class="flex-between" style="padding:8px 0;border-bottom:1px solid #F1F5F9">
+        <div>
+          <p style="font-size:12.5px;font-weight:600;margin:0">${item.material}</p>
+          <p class="tiny muted" style="margin:0">${invAvailable(item)} ${item.unit} available</p>
+        </div>
+        <span class="pill" style="color:${low?'#DC2626':'#16A34A'};background:${low?'#FEE2E2':'#DCFCE7'}">${weeks===null ? "Stable" : weeks+" wks left"}</span>
+      </div>`);
+  });
+  icons();
+}
+
 /* ---------------------------- module placeholder ---------------------------- */
 function renderPlaceholder(title){
   const item = NAV.find(n=>n.label===title) || NAV[0];
@@ -3531,6 +3760,7 @@ function renderAll(){
   else if (state.active === "Documents") renderDocumentsModule();
   else if (state.active === "HR & Payroll") renderHRModule();
   else if (state.active === "Equipment") renderEquipmentModule();
+  else if (state.active === "AI Insights") renderAIModule();
   else renderPlaceholder(state.active);
   icons();
 }
