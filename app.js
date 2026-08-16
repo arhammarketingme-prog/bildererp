@@ -65,10 +65,10 @@ const SEV = { red:{bg:"#FEE2E2",fg:"#DC2626"}, orange:{bg:"#FFEDD5",fg:"#EA580C"
 
 const MODULE_CARDS = [
   { title:"Projects", icon:"folder-kanban", rows:[["All Projects",3],["Active",3],["Completed",0],["On Hold",0]] },
-  { title:"BOQ & Estimation", icon:"calculator", rows:[["Total BOQs",9],["Approved",6],["Under Approval",2],["Draft",1]] },
-  { title:"Purchase & Material", icon:"shopping-cart", rows:[["Total PO",2807],["Open PO",1479],["Paid PO",1328],["Suppliers",374]] },
-  { title:"Labour & Contractor", icon:"hard-hat", rows:[["Total Labour",245],["Present Today",198],["Absent Today",47],["Contractors",32]] },
-  { title:"Billing & Accounts", icon:"wallet", rows:[["Total Invoices",7],["Paid",3],["Outstanding",4],["Overdue",2]] },
+  { title:"BOQ & Estimation", icon:"calculator", rows:[["Total BOQs",0],["Approved",0],["Under Approval",0],["Draft",0]] },
+  { title:"Purchase & Material", icon:"shopping-cart", rows:[["Total Entries",2807],["Open",2145],["Paid",662],["Suppliers",374]] },
+  { title:"Labour & Contractor", icon:"hard-hat", rows:[["Total Labour",0],["Present Today",0],["Absent Today",0],["Contractors",0]] },
+  { title:"Billing & Accounts", icon:"wallet", rows:[["Total Invoices",0],["Paid",0],["Outstanding",0],["Overdue",0]] },
 ];
 
 const PROGRESS_DATA = [
@@ -77,11 +77,11 @@ const PROGRESS_DATA = [
   { name:"Delayed", value:0, color:"#DC2626" },
   { name:"Not Started", value:0, color:"#94A3B8" },
 ];
-const CASHFLOW_LABELS = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
-const CASHFLOW_IN  = [2.1,2.6,2.4,3.1,3.4,2.9,3.6,3.9,4.2,3.7,4.0,4.6];
-const CASHFLOW_OUT = [1.6,1.9,2.1,2.3,2.6,2.4,2.8,3.0,3.3,2.9,3.1,3.5];
-const PROFIT_LABELS = ["P1","P2","P3","P4","P5","P6","P7","P8"];
-const PROFIT_VALUES = [145,98,87,76,-22,41,-14,63];
+const CASHFLOW_LABELS = ["Jun'25","Jul'25","Aug'25","Sep'25","Oct'25","Nov'25","Dec'25","Jan'26","Feb'26","Mar'26","Apr'26","May'26"];
+const CASHFLOW_IN  = [0.24,0.19,0.17,0.27,0.44,0.43,0.58,0.25,0.26,0.26,0.11,0.02];
+const CASHFLOW_OUT = [0.39,0.19,0.22,0.18,0.76,0.58,0.78,0.68,0.67,0.69,0.60,0.27];
+const PROFIT_LABELS = ["Zinnia","Whispering Grooves","Genial"];
+const PROFIT_VALUES = [0,0,0];
 
 const TOP_PROJECTS = [
   { name:"Genial", loc:"Maharashtra", profit:"₹9,86,92,893", margin:1516 },
@@ -90,12 +90,12 @@ const TOP_PROJECTS = [
 ];
 
 const BOTTOM_KPIS = [
-  { label:"Manpower on Site", value:"198 / 245", icon:"users" },
-  { label:"Equipment Deployed", value:"45", icon:"wrench" },
-  { label:"Total Sites", value:"18", icon:"map-pin" },
-  { label:"Safety Compliance", value:"92%", icon:"shield-check" },
-  { label:"Quality Score", value:"88%", icon:"check-circle-2" },
-  { label:"Client Satisfaction", value:"4.7 / 5", icon:"star" },
+  { label:"Total Sites", value:"3", icon:"map-pin" },
+  { label:"Suppliers Recorded", value:"374", icon:"users" },
+  { label:"Purchase Entries", value:"2,807", icon:"shopping-cart" },
+  { label:"Paid Entries", value:"662", icon:"check-circle-2" },
+  { label:"Pending Entries", value:"2,145", icon:"clock" },
+  { label:"Equipment Tracked", value:"0", icon:"wrench" },
 ];
 
 const QUICK_ACTIONS = [
@@ -131,17 +131,7 @@ const BOQ_STATUS_META = {
 };
 const UNITS = ["Cum","Sqm","Rmt","Kg","Ton","Nos","Bag","Ltr"];
 
-let BOQS = [
-  { id:"BOQ-0001", project:"Zinnia", item:"Excavation for Foundation", description:"Earthwork excavation in ordinary soil up to 1.5m depth", unit:"Cum", qty:1250, rate:185, actual:238000, remarks:"Rocky patch found, minor overrun", status:"Approved" },
-  { id:"BOQ-0002", project:"Zinnia", item:"RCC M25 Footing", description:"Reinforced cement concrete M25 grade for isolated footings", unit:"Cum", qty:340, rate:8200, actual:2820000, remarks:"", status:"Approved" },
-  { id:"BOQ-0003", project:"Whispering Grooves", item:"Brick Masonry 230mm", description:"Class-A brick masonry in CM 1:6 for external walls", unit:"Sqm", qty:2100, rate:850, actual:1750000, remarks:"", status:"Approved" },
-  { id:"BOQ-0004", project:"Whispering Grooves", item:"Internal Plastering 12mm", description:"Cement plaster 1:4 on internal walls", unit:"Sqm", qty:4800, rate:145, actual:0, remarks:"Awaiting site readiness", status:"Under Approval" },
-  { id:"BOQ-0005", project:"Genial", item:"Structural Steel Fabrication", description:"Fabrication and erection of structural steel members", unit:"Ton", qty:85, rate:92000, actual:8100000, remarks:"Rate escalation applied", status:"Approved" },
-  { id:"BOQ-0006", project:"Genial", item:"Aluminium Window Frames", description:"Powder-coated aluminium window frames with glazing", unit:"Sqm", qty:620, rate:3400, actual:0, remarks:"", status:"Draft" },
-  { id:"BOQ-0007", project:"Zinnia", item:"Vitrified Flooring 600x600", description:"Vitrified tile flooring including bedding and grouting", unit:"Sqm", qty:3100, rate:780, actual:2380000, remarks:"", status:"Approved" },
-  { id:"BOQ-0008", project:"Whispering Grooves", item:"Waterproofing Terrace", description:"APP membrane waterproofing on terrace slab", unit:"Sqm", qty:980, rate:410, actual:0, remarks:"Vendor quote pending", status:"Under Approval" },
-  { id:"BOQ-0009", project:"Zinnia", item:"External Painting", description:"Exterior emulsion paint, two coats with primer", unit:"Sqm", qty:5200, rate:95, actual:520000, remarks:"", status:"Draft" },
-];
+let BOQS = [];
 
 /* ---------------------------- Purchase & Material data ---------------------------- */
 const PO_STATUS_META = {
@@ -2975,24 +2965,9 @@ let INVENTORY = [
 /* ---------------------------- Labour & Contractor data ---------------------------- */
 const TRADES = ["Mason", "Carpenter", "Bar Bender", "Electrician", "Plumber", "Painter", "Helper", "Fitter"];
 
-let CONTRACTORS = [
-  { id:"CTR-01", name:"Shivaji Labour Suppliers", trade:"Mason", project:"Zinnia", workers:32, dayRate:750, totalBilled:1840000, advance:220000, outstanding:1620000 },
-  { id:"CTR-02", name:"Patil Construction Labour", trade:"Bar Bender", project:"Genial", workers:18, dayRate:820, totalBilled:1120000, advance:150000, outstanding:970000 },
-  { id:"CTR-03", name:"Deshmukh Electrical Works", trade:"Electrician", project:"Whispering Grooves", workers:12, dayRate:900, totalBilled:640000, advance:80000, outstanding:560000 },
-  { id:"CTR-04", name:"Karad Carpentry Group", trade:"Carpenter", project:"Zinnia", workers:15, dayRate:780, totalBilled:580000, advance:60000, outstanding:520000 },
-  { id:"CTR-05", name:"Om Sai Painting Contractors", trade:"Painter", project:"Zinnia", workers:22, dayRate:680, totalBilled:410000, advance:40000, outstanding:370000 },
-  { id:"CTR-06", name:"Bhosale Plumbing Services", trade:"Plumber", project:"Zinnia", workers:9, dayRate:850, totalBilled:295000, advance:35000, outstanding:260000 },
-];
+let CONTRACTORS = [];
 
-let ATTENDANCE = [
-  { id:"ATT-001", date:"2026-08-14", contractor:"Shivaji Labour Suppliers", project:"Zinnia", present:30, absent:2, otHours:24 },
-  { id:"ATT-002", date:"2026-08-14", contractor:"Patil Construction Labour", project:"Genial", present:16, absent:2, otHours:12 },
-  { id:"ATT-003", date:"2026-08-14", contractor:"Deshmukh Electrical Works", project:"Whispering Grooves", present:11, absent:1, otHours:6 },
-  { id:"ATT-004", date:"2026-08-13", contractor:"Karad Carpentry Group", project:"Zinnia", present:14, absent:1, otHours:8 },
-  { id:"ATT-005", date:"2026-08-13", contractor:"Om Sai Painting Contractors", project:"Zinnia", present:20, absent:2, otHours:16 },
-  { id:"ATT-006", date:"2026-08-13", contractor:"Bhosale Plumbing Services", project:"Zinnia", present:8, absent:1, otHours:4 },
-  { id:"ATT-007", date:"2026-08-12", contractor:"Shivaji Labour Suppliers", project:"Zinnia", present:29, absent:3, otHours:18 },
-];
+let ATTENDANCE = [];
 
 /* ---------------------------- Billing & Accounts data ---------------------------- */
 const INV_STATUS_META = {
@@ -3008,23 +2983,11 @@ function invNet(inv){
   return inv.basic + gstAmt - tdsAmt - retentionAmt;
 }
 
-let INVOICES = [
-  { id:"INV-2001", raBill:"RA-14", client:"Hiranmayi Developers", project:"Zinnia", basic:8500000, gst:18, tds:1, retention:5, dueDate:"2026-08-10", status:"Overdue", paid:0 },
-  { id:"INV-2002", raBill:"RA-11", client:"Hiranmayi Developers", project:"Whispering Grooves", basic:6200000, gst:18, tds:1, retention:5, dueDate:"2026-08-28", status:"Outstanding", paid:0 },
-  { id:"INV-2003", raBill:"RA-08", client:"Hiranmayi Developers", project:"Genial", basic:4100000, gst:18, tds:1, retention:5, dueDate:"2026-07-30", status:"Paid", paid:0 },
-  { id:"INV-2004", raBill:"RA-09", client:"Hiranmayi Developers", project:"Zinnia", basic:2950000, gst:18, tds:2, retention:5, dueDate:"2026-08-20", status:"Outstanding", paid:0 },
-  { id:"INV-2005", raBill:"RA-05", client:"Hiranmayi Developers", project:"Whispering Grooves", basic:5300000, gst:18, tds:1, retention:5, dueDate:"2026-08-05", status:"Overdue", paid:0 },
-  { id:"INV-2006", raBill:"RA-16", client:"Hiranmayi Developers", project:"Zinnia", basic:7800000, gst:18, tds:1, retention:5, dueDate:"2026-09-01", status:"Paid", paid:0 },
-  { id:"INV-2007", raBill:"RA-03", client:"Hiranmayi Developers", project:"Whispering Grooves", basic:3400000, gst:18, tds:1, retention:0, dueDate:"2026-07-15", status:"Paid", paid:0 },
-];
+let INVOICES = [];
 INVOICES.forEach(inv=>{ if (inv.status==="Paid") inv.paid = invNet(inv); });
 
 const PAYMENT_MODES = ["Bank Transfer", "Cheque", "UPI", "RTGS/NEFT"];
-let PAYMENTS = [
-  { id:"RCP-501", client:"Hiranmayi Developers", invoice:"INV-2003", amount:4100000*1.18*0.94, mode:"RTGS/NEFT", date:"2026-08-01" },
-  { id:"RCP-502", client:"Hiranmayi Developers", invoice:"INV-2006", amount:7800000*1.18*0.94, mode:"Bank Transfer", date:"2026-08-06" },
-  { id:"RCP-503", client:"Hiranmayi Developers", invoice:"INV-2007", amount:3400000*1.18*0.99, mode:"Cheque", date:"2026-07-20" },
-];
+let PAYMENTS = [];
 
 /* ---------------------------- Clients & Vendors data ---------------------------- */
 let CLIENTS = [
@@ -3109,51 +3072,21 @@ const ISSUE_STATUS_META = {
 const WEATHER_OPTIONS = ["Clear", "Cloudy", "Rain", "Extreme Heat"];
 
 let SITE_ENGINEERS = {
-  "Zinnia": "Rohit Sharma",
-  "Whispering Grooves": "Anita Deshmukh",
-  "Genial": "Vikram Patil",
-  "Zinnia": "Rohit Sharma",
-  "Whispering Grooves": "Sneha Kulkarni",
-  "Genial": "Anita Deshmukh",
-  "Zinnia": "Vikram Patil",
-  "Whispering Grooves": "Sneha Kulkarni",
+  "Zinnia": "Not assigned",
+  "Whispering Grooves": "Not assigned",
+  "Genial": "Not assigned",
 };
 
-let DPRS = [
-  { id:"DPR-101", date:"2026-08-14", site:"Zinnia", weather:"Clear", manpower:30, workDone:"Completed shuttering for 3rd floor slab, started rebar tying for column C12-C18.", materialNotes:"120 cement bags, 8 Cum sand consumed", notes:"Minor delay due to concrete pump breakdown, resolved by evening." },
-  { id:"DPR-102", date:"2026-08-14", site:"Genial", weather:"Cloudy", manpower:16, workDone:"Structural steel erection on Level 6 completed, welding inspection pending.", materialNotes:"2.5 Ton structural steel used", notes:"Welding inspector to visit tomorrow morning." },
-  { id:"DPR-103", date:"2026-08-13", site:"Whispering Grooves", weather:"Rain", manpower:11, workDone:"Internal plastering paused due to rain, waterproofing check on terrace.", materialNotes:"No major consumption today", notes:"Site partially waterlogged near Block B entrance, pump deployed." },
-  { id:"DPR-104", date:"2026-08-13", site:"Zinnia", weather:"Clear", manpower:14, workDone:"Vitrified tile laying completed for Tower 2, Floor 4.", materialNotes:"620 Sqm tiles, 40 bags tile adhesive", notes:"Quality check passed for grouting finish." },
-  { id:"DPR-105", date:"2026-08-12", site:"Zinnia", weather:"Extreme Heat", manpower:20, workDone:"External painting first coat on North facade.", materialNotes:"180 Ltr emulsion paint used", notes:"Work paused 1-3pm due to heat, resumed evening shift." },
-];
+let DPRS = [];
 
-let ISSUES = [
-  { id:"ISS-201", site:"Zinnia", title:"Scaffolding instability near Block A", category:"Safety Incident", severity:"High", status:"In Progress", reportedBy:"Rohit Sharma", date:"2026-08-13" },
-  { id:"ISS-202", site:"Genial", title:"Delay in structural steel delivery", category:"Material Delay", severity:"Medium", status:"Open", reportedBy:"Vikram Patil", date:"2026-08-12" },
-  { id:"ISS-203", site:"Whispering Grooves", title:"Water seepage near Block B basement", category:"Site Issue", severity:"Medium", status:"Open", reportedBy:"Anita Deshmukh", date:"2026-08-13" },
-  { id:"ISS-204", site:"Whispering Grooves", title:"Worker minor injury - hand laceration", category:"Safety Incident", severity:"Low", status:"Resolved", reportedBy:"Sneha Kulkarni", date:"2026-08-05" },
-  { id:"ISS-205", site:"Zinnia", title:"Crane operator certification expired", category:"Compliance", severity:"High", status:"Resolved", reportedBy:"Vikram Patil", date:"2026-08-01" },
-];
+let ISSUES = [];
 
 /* ---------------------------- Documents data ---------------------------- */
 const DOC_CATEGORIES = ["Contracts", "Drawings", "Approvals", "Compliance", "Site Photos", "Invoices & Billing"];
 const DOC_TYPE_ICON = { pdf:"file-text", docx:"file-text", xlsx:"file-spreadsheet", dwg:"ruler", jpg:"image", png:"image" };
 const DOC_TYPE_TINT = { pdf:{fg:"#DC2626",bg:"#FEE2E2"}, docx:{fg:"#2563EB",bg:"#DBEAFE"}, xlsx:{fg:"#16A34A",bg:"#DCFCE7"}, dwg:{fg:"#EA580C",bg:"#FFEDD5"}, jpg:{fg:"#7C3AED",bg:"#EDE9FE"}, png:{fg:"#7C3AED",bg:"#EDE9FE"} };
 
-let DOCUMENTS = [
-  { id:"DOC-001", name:"Zinnia - Construction Agreement.pdf", project:"Zinnia", category:"Contracts", type:"pdf", size:"2.4 MB", uploadedBy:"Rohit Sharma", date:"2024-01-18" },
-  { id:"DOC-002", name:"GPR Structural Drawings - Rev 3.dwg", project:"Zinnia", category:"Drawings", type:"dwg", size:"18.6 MB", uploadedBy:"Rohit Sharma", date:"2024-03-02" },
-  { id:"DOC-003", name:"Environmental Clearance Certificate.pdf", project:"Zinnia", category:"Compliance", type:"pdf", size:"1.1 MB", uploadedBy:"Admin User", date:"2024-01-25" },
-  { id:"DOC-004", name:"Whispering Grooves - Sale Agreement Template.docx", project:"Whispering Grooves", category:"Contracts", type:"docx", size:"340 KB", uploadedBy:"Anita Deshmukh", date:"2023-08-10" },
-  { id:"DOC-005", name:"Site Progress - August Week 2.jpg", project:"Whispering Grooves", category:"Site Photos", type:"jpg", size:"3.2 MB", uploadedBy:"Anita Deshmukh", date:"2026-08-13" },
-  { id:"DOC-006", name:"Genial - Structural Steel BOQ.xlsx", project:"Genial", category:"Approvals", type:"xlsx", size:"210 KB", uploadedBy:"Vikram Patil", date:"2024-04-15" },
-  { id:"DOC-007", name:"Fire NOC - Genial.pdf", project:"Genial", category:"Compliance", type:"pdf", size:"890 KB", uploadedBy:"Vikram Patil", date:"2024-05-01" },
-  { id:"DOC-008", name:"Zinnia - Tile Layout Plan.dwg", project:"Zinnia", category:"Drawings", type:"dwg", size:"9.4 MB", uploadedBy:"Rohit Sharma", date:"2024-06-20" },
-  { id:"DOC-009", name:"Whispering Grooves - RA Bill 05.pdf", project:"Whispering Grooves", category:"Invoices & Billing", type:"pdf", size:"640 KB", uploadedBy:"Sneha Kulkarni", date:"2026-08-05" },
-  { id:"DOC-010", name:"Zinnia - Facade Elevation.png", project:"Zinnia", category:"Drawings", type:"png", size:"4.8 MB", uploadedBy:"Vikram Patil", date:"2024-07-11" },
-  { id:"DOC-011", name:"Zinnia - Client MoU.pdf", project:"Zinnia", category:"Contracts", type:"pdf", size:"1.6 MB", uploadedBy:"Admin User", date:"2023-06-08" },
-  { id:"DOC-012", name:"Whispering Grooves - Completion Certificate.pdf", project:"Whispering Grooves", category:"Compliance", type:"pdf", size:"720 KB", uploadedBy:"Sneha Kulkarni", date:"2024-06-18" },
-];
+let DOCUMENTS = [];
 
 /* ---------------------------- HR & Payroll data ---------------------------- */
 const ROLES = ["Super Admin", "Admin", "Project Manager", "Site Engineer", "Accountant", "Purchase Manager", "HR", "Supervisor"];
@@ -3163,17 +3096,7 @@ const PAYROLL_STATUS_META = {
   "Pending": {fg:"#EA580C", bg:"#FFEDD5"},
 };
 
-let EMPLOYEES = [
-  { id:"EMP-001", name:"Rohit Sharma", role:"Project Manager", department:"Site Operations", project:"Zinnia", phone:"+91 98110 22334", email:"rohit.sharma@buildpro.in", joinDate:"2021-04-12", salary:95000 },
-  { id:"EMP-002", name:"Anita Deshmukh", role:"Project Manager", department:"Site Operations", project:"Whispering Grooves", phone:"+91 98220 33445", email:"anita.deshmukh@buildpro.in", joinDate:"2020-11-03", salary:98000 },
-  { id:"EMP-003", name:"Vikram Patil", role:"Site Engineer", department:"Site Operations", project:"Genial", phone:"+91 98330 44556", email:"vikram.patil@buildpro.in", joinDate:"2022-02-18", salary:68000 },
-  { id:"EMP-004", name:"Sneha Kulkarni", role:"Site Engineer", department:"Site Operations", project:"Whispering Grooves", phone:"+91 98440 55667", email:"sneha.kulkarni@buildpro.in", joinDate:"2022-07-25", salary:70000 },
-  { id:"EMP-005", name:"Admin User", role:"Super Admin", department:"Management", project:"—", phone:"+91 98550 66778", email:"admin@buildpro.in", joinDate:"2019-01-15", salary:150000 },
-  { id:"EMP-006", name:"Priya Nair", role:"Accountant", department:"Finance", project:"—", phone:"+91 98660 77889", email:"priya.nair@buildpro.in", joinDate:"2021-09-08", salary:52000 },
-  { id:"EMP-007", name:"Rahul Joshi", role:"Purchase Manager", department:"Procurement", project:"—", phone:"+91 98770 88990", email:"rahul.joshi@buildpro.in", joinDate:"2022-01-10", salary:58000 },
-  { id:"EMP-008", name:"Kavita Rane", role:"HR", department:"Human Resources", project:"—", phone:"+91 98880 99001", email:"kavita.rane@buildpro.in", joinDate:"2023-03-05", salary:48000 },
-  { id:"EMP-009", name:"Suresh Pawar", role:"Supervisor", department:"Site Operations", project:"Zinnia", phone:"+91 98990 00112", email:"suresh.pawar@buildpro.in", joinDate:"2023-06-14", salary:38000 },
-];
+let EMPLOYEES = [];
 
 function payrollDeductions(basic){ return { pf: basic*0.12, tds: basic>75000 ? basic*0.05 : 0 }; }
 function payrollNet(basic, allowances){ const d = payrollDeductions(basic); return basic + allowances - d.pf - d.tds; }
@@ -3204,24 +3127,18 @@ const state = {
 /* ---------------------------- Settings data ---------------------------- */
 const ALL_ROLES = [...ROLES, "Client"];
 let COMPANY_PROFILE = {
-  name:"BuildPro Constructions Pvt. Ltd.",
-  gstin:"27AABCB1234C1Z5",
-  address:"4th Floor, Skyline Business Hub, Baner Road, Pune, Maharashtra 411045",
-  phone:"+91 20 4567 8900",
-  email:"info@buildproerp.in",
+  name:"Hiranmayi Developers",
+  gstin:"",
+  address:"Maharashtra",
+  phone:"",
+  email:"",
   fy:"FY 2025-26",
   currency:"INR (₹)",
 };
 
 let SYSTEM_USERS = [
   { id:"USR-01", name:"Admin User", email:"admin@buildpro.in", role:"Super Admin", status:"Active" },
-  { id:"USR-02", name:"Rohit Sharma", email:"rohit.sharma@buildpro.in", role:"Project Manager", status:"Active" },
-  { id:"USR-03", name:"Anita Deshmukh", email:"anita.deshmukh@buildpro.in", role:"Project Manager", status:"Active" },
-  { id:"USR-04", name:"Vikram Patil", email:"vikram.patil@buildpro.in", role:"Site Engineer", status:"Active" },
-  { id:"USR-05", name:"Priya Nair", email:"priya.nair@buildpro.in", role:"Accountant", status:"Active" },
-  { id:"USR-06", name:"Rahul Joshi", email:"rahul.joshi@buildpro.in", role:"Purchase Manager", status:"Active" },
-  { id:"USR-07", name:"Kavita Rane", email:"kavita.rane@buildpro.in", role:"HR", status:"Inactive" },
-  { id:"USR-08", name:"Hiranmayi Developers", email:"owner@hiranmayi.in", role:"Client", status:"Active" },
+  { id:"USR-02", name:"Hiranmayi Developers", email:"owner@hiranmayi.in", role:"Client", status:"Active" },
 ];
 
 let NOTIF_PREFS = [
@@ -3243,17 +3160,7 @@ const EQUIP_STATUS_META = {
   "Under Maintenance": {fg:"#EA580C", bg:"#FFEDD5"},
 };
 
-let EQUIPMENT = [
-  { id:"EQ-01", name:"Tower Crane TC-5013", category:"Tower Crane", project:"Zinnia", status:"Deployed", operator:"Mahesh Yadav", ownership:"Owned", lastService:"2026-07-10", nextService:"2026-09-10" },
-  { id:"EQ-02", name:"Excavator JS-220", category:"Excavator", project:"Genial", status:"Deployed", operator:"Ganesh More", ownership:"Rented", lastService:"2026-06-28", nextService:"2026-08-28" },
-  { id:"EQ-03", name:"JCB 3DX Backhoe", category:"JCB / Backhoe", project:"Whispering Grooves", status:"Under Maintenance", operator:"—", ownership:"Owned", lastService:"2026-08-01", nextService:"2026-08-16" },
-  { id:"EQ-04", name:"Concrete Mixer CM-500", category:"Concrete Mixer", project:"Whispering Grooves", status:"Deployed", operator:"Ravi Kadam", ownership:"Owned", lastService:"2026-07-20", nextService:"2026-09-20" },
-  { id:"EQ-05", name:"Mobile Crane 25T", category:"Mobile Crane", project:"Zinnia", status:"Deployed", operator:"Sanjay Bhosale", ownership:"Rented", lastService:"2026-07-05", nextService:"2026-09-05" },
-  { id:"EQ-06", name:"Diesel Generator 125kVA", category:"Generator", project:"Zinnia", status:"Deployed", operator:"—", ownership:"Owned", lastService:"2026-06-15", nextService:"2026-08-15" },
-  { id:"EQ-07", name:"Dumper Truck DT-12", category:"Dumper", project:"Zinnia", status:"Idle", operator:"—", ownership:"Owned", lastService:"2026-05-30", nextService:"2026-08-30" },
-  { id:"EQ-08", name:"Plate Compactor PC-90", category:"Compactor", project:"Whispering Grooves", status:"Idle", operator:"—", ownership:"Owned", lastService:"2026-05-10", nextService:"2026-08-10" },
-  { id:"EQ-09", name:"Steel Scaffolding Set A", category:"Scaffolding", project:"Genial", status:"Idle", operator:"—", ownership:"Rented", lastService:"2026-04-22", nextService:"2026-09-22" },
-];
+let EQUIPMENT = [];
 
 
 /* ---------------------------- sidebar render ---------------------------- */
@@ -3337,7 +3244,7 @@ function renderDashboard(){
         <div class="grid grid-2 mt-3" id="progressLegend"></div>
       </div>
       <div class="card" style="padding:16px">
-        <div class="flex-between"><h3 class="section-title">Cash Flow Overview</h3>
+        <div class="flex-between"><h3 class="section-title">Monthly Expense Trend (Paid vs Pending)</h3>
           <button class="link-btn" id="cashflowReportBtn">View Report <i data-lucide="arrow-right" style="width:12px;height:12px"></i></button></div>
         <div style="height:220px;margin-top:8px"><canvas id="cashflowChart"></canvas></div>
       </div>
@@ -3506,8 +3413,8 @@ function drawDashboardCharts(){
     data:{
       labels: CASHFLOW_LABELS,
       datasets:[
-        { label:"Cash Inflow", data:CASHFLOW_IN, borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.12)", fill:true, tension:.35, pointRadius:0 },
-        { label:"Cash Outflow", data:CASHFLOW_OUT, borderColor:"#EA580C", backgroundColor:"rgba(234,88,12,.10)", fill:true, tension:.35, pointRadius:0 },
+        { label:"Paid", data:CASHFLOW_IN, borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.12)", fill:true, tension:.35, pointRadius:0 },
+        { label:"Pending", data:CASHFLOW_OUT, borderColor:"#EA580C", backgroundColor:"rgba(234,88,12,.10)", fill:true, tension:.35, pointRadius:0 },
       ]
     },
     options:{
@@ -6552,7 +6459,7 @@ function renderForecastSection(){
   body.innerHTML = `
     <div class="grid split-13-1" style="margin-top:14px" id="forecastGrid">
       <div class="card" style="padding:16px">
-        <h3 class="section-title mt-0">Cash Flow Forecast — Next 3 Months</h3>
+        <h3 class="section-title mt-0">Expense Forecast — Next 3 Months</h3>
         <p class="tiny muted" style="margin:4px 0 12px">Projected using recent inflow/outflow trend.</p>
         <div style="height:220px"><canvas id="forecastChart"></canvas></div>
       </div>
@@ -6576,10 +6483,10 @@ function renderForecastSection(){
     data:{
       labels: [...CASHFLOW_LABELS.slice(-4), ...futureLabels],
       datasets:[
-        { label:"Actual Inflow", data:[...CASHFLOW_IN.slice(-4), null,null,null], borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.1)", tension:.35, pointRadius:2 },
-        { label:"Forecast Inflow", data:[null,null,null,CASHFLOW_IN[11], ...futureIn], borderColor:"#2563EB", borderDash:[6,4], backgroundColor:"transparent", tension:.35, pointRadius:2 },
-        { label:"Actual Outflow", data:[...CASHFLOW_OUT.slice(-4), null,null,null], borderColor:"#EA580C", backgroundColor:"rgba(234,88,12,.08)", tension:.35, pointRadius:2 },
-        { label:"Forecast Outflow", data:[null,null,null,CASHFLOW_OUT[11], ...futureOut], borderColor:"#EA580C", borderDash:[6,4], backgroundColor:"transparent", tension:.35, pointRadius:2 },
+        { label:"Actual Paid", data:[...CASHFLOW_IN.slice(-4), null,null,null], borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.1)", tension:.35, pointRadius:2 },
+        { label:"Forecast Paid", data:[null,null,null,CASHFLOW_IN[11], ...futureIn], borderColor:"#2563EB", borderDash:[6,4], backgroundColor:"transparent", tension:.35, pointRadius:2 },
+        { label:"Actual Pending", data:[...CASHFLOW_OUT.slice(-4), null,null,null], borderColor:"#EA580C", backgroundColor:"rgba(234,88,12,.08)", tension:.35, pointRadius:2 },
+        { label:"Forecast Pending", data:[null,null,null,CASHFLOW_OUT[11], ...futureOut], borderColor:"#EA580C", borderDash:[6,4], backgroundColor:"transparent", tension:.35, pointRadius:2 },
       ]
     },
     options:{
